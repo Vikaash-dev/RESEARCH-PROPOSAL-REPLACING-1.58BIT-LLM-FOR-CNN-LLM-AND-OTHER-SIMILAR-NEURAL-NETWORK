@@ -1,0 +1,157 @@
+================================================================================
+  ADA-7 STAGE 3: COMPONENT DESIGN & TECHNOLOGY STACK
+  Project: BitNet 1.58-bit for CNN/YOLO Object Detection
+  Date: February 2026
+================================================================================
+
+3.1  COMPONENT BREAKDOWN
+──────────────────────────
+
+┌────────────────────────────────────────────────────────────────┐
+│  bitnet/                                                       │
+│  ├── quantization.py    Core quantization functions            │
+│  │   ├── quantize_ternary()        Absmean {-1,0,+1}         │
+│  │   ├── quantize_ternary_ste()    STE variant for training   │
+│  │   ├── quantize_int8()           Per-tensor symmetric INT8  │
+│  │   ├── quantize_int8_per_channel() Per-channel INT8 (new)  │
+│  │   ├── quantize_activations()    Absmax activation quant    │
+│  │   ├── compute_ste_gradient_variance_ratio() Theory (new)   │
+│  │   ├── compute_cosine_similarity()  Quality metric (new)    │
+│  │   ├── compute_weight_entropy()     Health metric (new)     │
+│  │   └── compute_effective_rank()     Rank metric (new)       │
+│  │                                                             │
+│  ├── bitlinear.py       1.58-bit Linear layer                 │
+│  │   └── BitLinear(in, out) replaces nn.Linear                │
+│  │                                                             │
+│  ├── moqe_conv.py       Dual-Expert convolution               │
+│  │   └── MoQEConv(in, out) — Paper 1 architecture             │
+│  │       ├── w_expert_A, w_expert_B  (ternary experts)        │
+│  │       ├── get_fused_base5() → INT8 {-2..+2}               │
+│  │       └── orthogonal_loss() → scalar                       │
+│  │                                                             │
+│  ├── resbit_conv.py     Three-stream ResiBit block            │
+│  │   └── ResiBitConv(in, out) — Paper 2 architecture          │
+│  │       ├── w_a, w_b (ternary), w_r (INT8 highway)          │
+│  │       ├── mix_logits (Group-Mix, highway-biased init)      │
+│  │       ├── set_phase(PHASE_*) — training phase control      │
+│  │       ├── get_base5_fused() → INT8 {-2..+2}               │
+│  │       └── orthogonal_loss() → scalar                       │
+│  │                                                             │
+│  ├── training.py        Three-Phase Training Protocol          │
+│  │   ├── ThreePhaseScheduler(model, optimizer, config)        │
+│  │   ├── TrainingConfig(phase1, phase2, phase3)               │
+│  │   ├── PhaseConfig(num_epochs, lr, grad_clip, anneal)       │
+│  │   ├── compute_gradient_snr(model) → dict                   │
+│  │   └── detect_collapse() / get_diagnostics()                │
+│  │                                                             │
+│  ├── utils.py           Model surgery & analysis               │
+│  │   ├── replace_linear_with_bitlinear()                      │
+│  │   ├── replace_conv2d_with_moqe()                           │
+│  │   ├── replace_conv2d_with_resbit()                         │
+│  │   ├── compute_compression_ratio()                          │
+│  │   ├── compute_weight_distribution()                        │
+│  │   ├── compute_quantization_mse()      (new, Paper Table 1) │
+│  │   └── compute_mix_diversification_loss() (new, Paper §5.4) │
+│  │                                                             │
+│  ├── analysis.py        Theoretical analysis module (new)      │
+│  │   ├── theorem_1_information_capacity()                     │
+│  │   ├── theorem_2_ste_gradient_variance()                    │
+│  │   ├── theorem_3_orthogonal_convergence()                   │
+│  │   ├── theorem_4_base5_reparameterization()                 │
+│  │   ├── theorem_5_pareto_frontier()                          │
+│  │   ├── analyze_muon_trap()                                  │
+│  │   └── generate_theoretical_report()                        │
+│  │                                                             │
+│  └── deploy.py          Deployment module (new)                │
+│      ├── DeployedBase5Conv(weight, bias, stride, padding)     │
+│      ├── convert_moqe_to_deployed()                           │
+│      ├── convert_resbit_to_deployed()                         │
+│      └── export_model_for_deployment()                        │
+└────────────────────────────────────────────────────────────────┘
+
+
+3.2  DATA FLOW DIAGRAM
+────────────────────────
+
+Training Flow (ResiBit):
+  Input X
+    ├──→ Conv(X; quantize_ternary_ste(w_a)) → y_a  [Expert A]
+    ├──→ Conv(X; quantize_ternary_ste(w_b)) → y_b  [Expert B]
+    └──→ Conv(X; quantize_int8_per_channel(w_r)) → y_r  [Highway]
+          │
+          └──→ Group-Mix: α_a·y_a + α_b·y_b + α_r·y_r
+                  │
+                  └──→ BatchNorm → SiLU → Output Y
+
+Deployment Flow (Base-5):
+  Input X
+    ├──→ Conv(X; WB5)    [Fused Base-5, shift-and-add]
+    └──→ Conv(X; WR_i8)  [INT8 residual, standard MAC]
+          │
+          └──→ α_merged·y_b5 + α_r·y_r → BN → SiLU → Y
+
+
+3.3  TECHNOLOGY SELECTION
+──────────────────────────
+
+Component: Deep Learning Framework
+  Primary: PyTorch 2.3+ (exact match with paper implementations)
+  Alternative: JAX/Flax (migration complexity: HIGH)
+  Justification: Papers provide PyTorch code listings directly
+
+Component: Quantization Backend
+  Primary: Custom STE-based (implemented in quantization.py)
+  Alternative: PyTorch quantization.quantize_dynamic (not flexible enough)
+  Justification: Absmean ternary quantization is not in standard library
+
+Component: Object Detection Framework
+  Primary: Ultralytics YOLO26 (paper's target)
+  Alternative: mmdetection, Detectron2
+  Justification: YOLO26's DFL-free, NMS-free design is integral to approach
+
+Component: Testing Framework
+  Primary: pytest 9.0.2 (existing in repo)
+  Alternative: unittest
+  Justification: Already established with 146 passing tests
+
+Component: Hardware Deployment
+  Primary: Custom CUDA PSLUC kernel (for GPU)
+  Alternative: FPGA HDL (for ASIC)
+  Justification: Papers describe both pathways
+
+
+3.4  DEPENDENCY GRAPH
+──────────────────────
+
+quantization.py ← (no internal deps)
+     ↑
+bitlinear.py ← quantization.py
+moqe_conv.py ← quantization.py
+resbit_conv.py ← quantization.py
+     ↑
+training.py ← resbit_conv.py, moqe_conv.py
+utils.py ← bitlinear.py, moqe_conv.py, resbit_conv.py, quantization.py
+     ↑
+analysis.py ← quantization.py
+deploy.py ← moqe_conv.py, resbit_conv.py, quantization.py
+
+No circular dependencies. Clean layered architecture.
+
+
+3.5  DEVELOPMENT ESTIMATES
+───────────────────────────
+
+Component              | Story Pts | Hours | Calendar | Confidence
+-------------------------------------------------------------------
+quantization.py        |     5     |   8   | 1 day    | HIGH
+bitlinear.py           |     3     |   4   | 0.5 day  | HIGH
+moqe_conv.py           |     5     |   8   | 1 day    | HIGH
+resbit_conv.py         |     8     |  12   | 1.5 days | HIGH
+training.py            |     8     |  12   | 1.5 days | HIGH
+utils.py               |     5     |   8   | 1 day    | HIGH
+analysis.py (new)      |     5     |   8   | 1 day    | HIGH
+deploy.py (new)        |     3     |   5   | 0.5 day  | HIGH
+tests/ (all)           |     8     |  12   | 1.5 days | HIGH
+ADA-7 docs             |     5     |   8   | 1 day    | HIGH
+-------------------------------------------------------------------
+TOTAL                  |    55     |  85   | 10 days  | HIGH

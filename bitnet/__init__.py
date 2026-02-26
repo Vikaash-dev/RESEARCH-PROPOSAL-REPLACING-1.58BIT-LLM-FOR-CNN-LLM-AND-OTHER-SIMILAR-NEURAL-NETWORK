@@ -39,6 +39,8 @@ from bitnet.utils import (
     replace_conv2d_with_resbit,
     compute_compression_ratio,
     compute_weight_distribution,
+    compute_quantization_mse,
+    compute_mix_diversification_loss,
 )
 
 __version__ = "0.1.0"
@@ -65,4 +67,6 @@ __all__ = [
     "replace_conv2d_with_resbit",
     "compute_compression_ratio",
     "compute_weight_distribution",
+    "compute_quantization_mse",
+    "compute_mix_diversification_loss",
 ]

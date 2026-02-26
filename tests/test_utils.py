@@ -101,15 +101,21 @@ class TestReplaceConv2dMoQE:
         assert isinstance(model[1], MoQEConv)   # Replaced
 
     def test_expert_symmetry_breaking(self):
-        """Expert B should have a small perturbation relative to Expert A."""
+        """Expert B should use 0.1× scaling relative to Expert A (per paper).
+
+        Paper Listing 2, line 56: resibit.w_b.copy_(module.weight * 0.1)
+        This breaks symmetry by giving Expert B smaller initial magnitude,
+        encouraging it to specialize in low-frequency features.
+        """
         model = nn.Sequential(nn.Conv2d(16, 32, 3, padding=1))
+        original_weight = model[0].weight.data.clone()
         model = replace_conv2d_with_moqe(model)
 
         moqe = model[0]
-        # Experts should be similar but not identical
-        diff = (moqe.w_expert_A - moqe.w_expert_B).abs().mean().item()
-        assert diff > 0, "Experts are identical (no symmetry breaking)"
-        assert diff < 0.01, f"Perturbation too large: {diff}"
+        # Expert A should match original
+        assert torch.allclose(moqe.w_expert_A.data, original_weight)
+        # Expert B should be 0.1× original
+        assert torch.allclose(moqe.w_expert_B.data, original_weight * 0.1)
 
 
 class TestReplaceConv2dResiBit:

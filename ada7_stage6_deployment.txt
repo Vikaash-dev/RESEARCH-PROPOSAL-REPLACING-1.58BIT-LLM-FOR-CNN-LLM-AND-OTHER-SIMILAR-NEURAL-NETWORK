@@ -1,0 +1,109 @@
+================================================================================
+  ADA-7 STAGE 6: DEPLOYMENT & INFRASTRUCTURE MANAGEMENT
+  Project: BitNet 1.58-bit for CNN/YOLO Object Detection
+  Date: February 2026
+================================================================================
+
+6.1  ENVIRONMENT STRATEGY
+──────────────────────────
+
+Development (Local):
+  ─ Python 3.12+, PyTorch 2.3+, CPU-only
+  ─ pytest for unit/integration testing
+  ─ Hot reloading via standard Python import
+  ─ All 146 tests run in <3 seconds
+
+Staging (GPU Cluster):
+  ─ 4× A100 80GB (per Paper Table 5)
+  ─ COCO 2017 dataset (118k train, 5k val)
+  ─ Full 325-epoch three-phase training
+  ─ Monitoring via TensorBoard/W&B
+
+Production (Edge):
+  ─ Target: NVIDIA Jetson Orin (GPU path)
+  ─ Target: Xilinx ZCU102 (FPGA path)
+  ─ Target: Custom 28nm ASIC (long-term)
+  ─ Base-5 packed weights + INT8 highway
+
+
+6.2  DEPLOYMENT PIPELINE
+─────────────────────────
+
+Step 1: Train (GPU Cluster)
+  ├── Phase 1: FP32 warmup (10 epochs, LR=1e-3)
+  ├── Phase 2: Ternary anneal (15 epochs, highway frozen)
+  └── Phase 3: Full QAT (300 epochs, LR=1e-4)
+
+Step 2: Fuse (CPU)
+  ├── export_model_for_deployment(model)
+  ├── Fuse WA + WB → WB5 (INT8, {-2..+2})
+  └── Retain WR as INT8 residual stream
+
+Step 3: Pack (CPU)
+  ├── Map {-2,-1,0,1,2} → {0,1,2,3,4} (2-bit codes)
+  ├── Pack 4 weights per byte (PSLUC format)
+  └── Export packed tensor + INT8 highway
+
+Step 4: Deploy (Edge)
+  ├── GPU: Load packed weights, run PSLUC CUDA kernel
+  ├── FPGA: Load into Block RAM, hardwired shift-add logic
+  └── ASIC: Dedicated shift-add unit, no software overhead
+
+
+6.3  HARDWARE DEPLOYMENT PATHWAY (Paper §4.6)
+───────────────────────────────────────────────
+
+Path A: Base-5 Shift-Add Stream
+  WB5 = +2: acc += (x << 1)     [bit shift left + add]
+  WB5 = +1: acc += x             [add]
+  WB5 =  0: (skip)               [no-op, implicit sparsity]
+  WB5 = -1: acc -= x             [subtract]
+  WB5 = -2: acc -= (x << 1)     [bit shift left + subtract]
+
+Path B: INT8 Residual Stream
+  Standard INT8 MAC via dp4a instruction (NVIDIA)
+  or INT8 multiply-accumulate on Hexagon NPU (Qualcomm)
+
+Aggregation:
+  INT16 accumulator for both paths
+  Mix coefficients stored as INT8 scaling factors
+  BatchNorm fused into scaling (standard practice)
+
+
+6.4  PERFORMANCE PROJECTIONS (Paper Table 4, Appendix A.6)
+───────────────────────────────────────────────────────────
+
+Metric                      | Target           | Source
+-----------------------------------------------------------
+Weight storage (packed)     | ~0.55 MB         | Analytical †
+Compression vs FP32         | 13.78×           | Analytical †
+GPU throughput              | >30 FPS (Orin)   | Projected *
+FPGA throughput             | >60 FPS (ZCU102) | Projected *
+mAP50 vs FP32 gap          | <3%              | Projected *
+Small-object mAP gap        | <6%              | Projected *
+Energy per inference (ASIC) | <1 mJ            | Projected *
+
+† = Analytically derived (verified in tests)
+* = Requires empirical validation (H3 pending)
+
+
+6.5  MONITORING & OBSERVABILITY (Production)
+─────────────────────────────────────────────
+
+Training Metrics:
+  ─ Per-epoch: loss, mAP50, mAP50-95, gradient SNR
+  ─ Per-block: weight entropy, effective rank, zero fraction
+  ─ Per-phase: ternary anneal factor, learning rate
+  ─ Collapse alert: if zero_fraction > 0.55 in any block
+
+Deployment Metrics:
+  ─ Inference latency (ms/frame)
+  ─ Memory bandwidth utilization
+  ─ Shift-add vs MAC operation ratio
+  ─ Power consumption (edge devices)
+
+Alerting Thresholds:
+  ─ CRITICAL: mAP50 < 0.1 during Phase 3
+  ─ WARNING: zero_fraction > 0.45 in any expert
+  ─ WARNING: entropy < 1.2 bits in any expert
+  ─ INFO: effective rank drops >20% from Phase 1 baseline

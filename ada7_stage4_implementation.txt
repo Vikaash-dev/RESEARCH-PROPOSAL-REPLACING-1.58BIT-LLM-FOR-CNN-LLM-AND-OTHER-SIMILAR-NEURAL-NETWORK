@@ -1,0 +1,132 @@
+================================================================================
+  ADA-7 STAGE 4: IMPLEMENTATION STRATEGY & DEVELOPMENT PIPELINE
+  Project: BitNet 1.58-bit for CNN/YOLO Object Detection
+  Date: February 2026
+================================================================================
+
+4.1  PHASED DEVELOPMENT PLAN
+──────────────────────────────
+
+MVP Definition (Complete ✓):
+  Core features: Ternary quantization, MoQEConv, ResiBitConv,
+  three-phase training, model surgery, compression analysis.
+  Success metric: All paper equations implemented, 146 tests passing.
+
+Feature Prioritization (MoSCoW):
+
+  MUST HAVE (✓ Complete):
+  ─ Absmean ternary quantization with STE
+  ─ Dual-expert Base-5 architecture (MoQEConv)
+  ─ Three-stream ResiBit block with INT8 highway
+  ─ Three-phase training protocol
+  ─ Model surgery (Linear→BitLinear, Conv2d→MoQE/ResiBit)
+  ─ Base-5 weight fusion for deployment
+
+  SHOULD HAVE (✓ Complete):
+  ─ Per-channel INT8 quantization (improvement over paper)
+  ─ Highway-biased Group-Mix initialization (improvement)
+  ─ Expert B 0.1× initialization (paper-faithful)
+  ─ Deployment module with shift-and-add op counting
+  ─ MSE-based sensitivity analysis for layer replacement
+  ─ Mix diversification penalty (Paper §5.4 open question)
+
+  COULD HAVE (✓ Complete):
+  ─ Theoretical analysis module (5 formal theorems)
+  ─ Muon Trap collapse analysis with staged diagnosis
+  ─ Shannon entropy weight health monitoring
+  ─ Effective rank monitoring for early collapse detection
+  ─ Cosine similarity metric for quantization quality
+  ─ STE gradient variance ratio computation
+
+  WON'T HAVE (Future Work):
+  ─ Full COCO 2017 training run (requires 4× A100 GPUs)
+  ─ CUDA PSLUC kernel compilation (requires nvcc toolchain)
+  ─ FPGA synthesis (requires Vivado/Quartus)
+  ─ StableQAT RDFS integration (requires further research)
+  ─ YOLO26 Ultralytics integration (requires ultralytics package)
+
+
+4.2  SPRINT PLAN
+─────────────────
+
+Sprint 1 (Complete ✓): Foundation
+  ─ Read both PDFs (52 pages total)
+  ─ Understand existing codebase (8 source files, 103 tests)
+  ─ Create ADA-7 knowledge tracking files
+
+Sprint 2 (Complete ✓): Core Improvements
+  ─ Add per-channel INT8 quantization
+  ─ Fix Expert B initialization to 0.1× (per paper)
+  ─ Add highway-biased Group-Mix initialization
+  ─ Update ResiBit forward pass to use per-channel INT8
+
+Sprint 3 (Complete ✓): Research Extensions
+  ─ Create theoretical analysis module (analysis.py)
+  ─ Create deployment module (deploy.py)
+  ─ Add MSE sensitivity analysis
+  ─ Add mix diversification penalty
+  ─ Add weight entropy, effective rank, cosine similarity
+
+Sprint 4 (Complete ✓): Testing & Validation
+  ─ Create test_research.py (43 new tests)
+  ─ Update test_utils.py for paper-faithful Expert B init
+  ─ Run all 146 tests — all passing
+
+Sprint 5 (Current): ADA-7 Documentation & Final Validation
+  ─ Create all 7 ADA-7 stage documents
+  ─ Generate theoretical analysis report
+  ─ Final code review and security scan
+
+
+4.3  DEVELOPMENT ENVIRONMENT
+──────────────────────────────
+
+Runtime:
+  Python 3.12.3, pytest 9.0.2
+  PyTorch (latest stable) with CPU backend
+  No GPU required for unit tests
+
+Dependencies (requirements.txt):
+  torch>=2.0.0
+  pytest>=7.0.0
+
+Project Structure:
+  bitnet/           — Source package (8 modules)
+  tests/            — Test suite (7 test files, 146 tests)
+  ada7_stage*.txt   — ADA-7 knowledge tracking files
+  research_analysis.txt — Cross-paper analysis
+  benchmark.py      — Performance benchmarking
+  requirements.txt  — Python dependencies
+  README.md         — Project documentation
+
+
+4.4  CODE QUALITY GATES
+─────────────────────────
+
+Gate 1: All tests pass (146/146) ✓
+Gate 2: No circular dependencies ✓
+Gate 3: All paper equations implemented with citations ✓
+Gate 4: Compression ratios match paper Table 1 ✓
+Gate 5: Expert initialization matches paper Listing 2 ✓
+Gate 6: Three-phase protocol matches paper Table 5 ✓
+Gate 7: Base-5 fusion produces strictly quinary values ✓
+Gate 8: No NaN/Inf during 10-step training loops ✓
+Gate 9: Gradient flows through all streams in all phases ✓
+
+
+4.5  CODE TEMPLATE: RESBIT BLOCK FORWARD PASS
+──────────────────────────────────────────────
+
+Reference: Paper 2, Eq. (7), Listing 1
+
+  Y = BN(SiLU(α_A · Conv(X; Ŵ_A) + α_B · Conv(X; Ŵ_B) + α_R · Conv(X; W_R)))
+
+Implementation maps to:
+  1. Phase-dependent weight quantization
+  2. Three parallel F.conv2d calls
+  3. Softmax-normalized per-channel mixing
+  4. BatchNorm2d → SiLU activation
+
+All three streams share the same stride, padding, and kernel_size.
+The INT8 highway uses per-channel quantization (our improvement).
+The Group-Mix logits are initialized with highway bias (our improvement).

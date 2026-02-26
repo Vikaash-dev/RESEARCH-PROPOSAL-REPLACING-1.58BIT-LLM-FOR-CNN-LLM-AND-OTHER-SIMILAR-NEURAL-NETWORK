@@ -110,8 +110,10 @@ def replace_conv2d_with_moqe(
             # helping orthogonal regularization separate the experts
             with torch.no_grad():
                 moqe.w_expert_A.copy_(module.weight)
-                moqe.w_expert_B.copy_(module.weight)
-                moqe.w_expert_B.add_(torch.randn_like(module.weight) * 0.001)
+                # Expert B: 0.1× scaling to break symmetry and
+                # encourage low-frequency specialization (Paper §3.2,
+                # Listing 2 line 56: "resibit.w_b.copy_(module.weight * 0.1)")
+                moqe.w_expert_B.copy_(module.weight * 0.1)
                 if module.bias is not None and moqe.bias is not None:
                     moqe.bias.copy_(module.bias)
             setattr(model, name, moqe)
@@ -168,8 +170,8 @@ def replace_conv2d_with_resbit(
             # Add small perturbation to Expert B to break symmetry
             with torch.no_grad():
                 resbit.w_a.copy_(module.weight)
-                resbit.w_b.copy_(module.weight)
-                resbit.w_b.add_(torch.randn_like(module.weight) * 0.001)
+                # Expert B: 0.1× scaling per paper (Listing 2, line 56)
+                resbit.w_b.copy_(module.weight * 0.1)
                 resbit.w_r.copy_(module.weight)
             setattr(model, name, resbit)
         else:
@@ -247,3 +249,64 @@ def compute_weight_distribution(W: torch.Tensor) -> dict[str, float]:
         "total_weights": total,
         "is_healthy": zero_frac < 0.5,  # >50% zeros indicates collapse
     }
+
+
+def compute_quantization_mse(layer: nn.Conv2d) -> float:
+    """Estimate ternary quantisation MSE for a Conv2d layer.
+
+    Implements the sensitivity analysis from Paper Table 1:
+    MSE = mean((W - Q(W))^2) where Q is absmean ternary quantization.
+
+    This metric determines which layers should be preserved in FP32
+    (high MSE = high sensitivity = preserve).
+
+    The paper found:
+      - Average MSE across 126 layers: 0.005639
+      - Maximum MSE: 0.079618
+      - Exclusion threshold (top 10%): 0.007575
+
+    Args:
+        layer: A nn.Conv2d layer to analyze.
+
+    Returns:
+        Mean squared error between original and ternary-quantized weights.
+    """
+    W = layer.weight.data
+    alpha = W.abs().mean().clamp(min=1e-6)
+    W_q = (W / alpha).round().clamp(-1, 1) * alpha
+    return ((W - W_q) ** 2).mean().item()
+
+
+def compute_mix_diversification_loss(model: nn.Module) -> torch.Tensor:
+    """Diversification penalty on Group-Mix coefficients.
+
+    Addresses the open question from Paper Section 5.4:
+      "A diversification penalty on the mixing coefficients, analogous
+       to the auxiliary loss in Mixture-of-Experts LLMs [Shazeer et al.,
+       2017], should be added to the training objective."
+
+    Penalizes Group-Mix coefficients that strongly favor one stream,
+    encouraging balanced utilization of all three streams (Expert A,
+    Expert B, INT8 Highway).
+
+    The penalty is: L_div = sum_c max(alpha_c) - 1/3
+    Minimized when all three streams have equal weight (1/3 each).
+
+    Args:
+        model: Model containing ResiBitConv blocks.
+
+    Returns:
+        Diversification loss (scalar tensor).
+    """
+    total = torch.tensor(0.0)
+    count = 0
+    for module in model.modules():
+        if isinstance(module, ResiBitConv):
+            mix = module._mix_weights()  # (3, C_out)
+            # Penalize dominant stream: max over 3 streams, mean over channels
+            dominant = mix.max(dim=0).values.mean()  # should be ~0.333
+            total = total.to(dominant.device) + (dominant - 1.0 / 3.0)
+            count += 1
+    if count == 0:
+        return total
+    return total / count
