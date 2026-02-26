@@ -78,6 +78,30 @@ An edge AI application targeting Raspberry Pi that processes dashcam footage in 
 | **Latent-Shared Manifold (LSM)** | Shared feature space enabling knowledge transfer between expert streams |
 | **Quantization-Aware Training (QAT)** | Training with simulated quantization to learn quantization-robust weights |
 
+## ADA-7 Development Framework
+
+This project follows the **Advanced Development Assistant (ADA-7)** methodology — a 7-stage, evidence-based development process that blends academic research with industry best practices. All knowledge gathered during research analysis is tracked in text files for transparency and reproducibility.
+
+### Knowledge Base (`knowledge/`)
+
+| File | Description |
+|------|-------------|
+| [`arxiv-analysis.txt`](knowledge/arxiv-analysis.txt) | Analysis of arXiv papers on ternary quantization, binary NNs, and QAT |
+| [`github-repos-analysis.txt`](knowledge/github-repos-analysis.txt) | Analysis of relevant GitHub repositories (BitNet, ultralytics, ncnn, etc.) |
+| [`cross-analysis.txt`](knowledge/cross-analysis.txt) | Cross-reference: paper concepts ↔ existing implementations, gap analysis |
+
+### Development Stages (`ada7-framework/`)
+
+| Stage | Document | Focus |
+|-------|----------|-------|
+| 1 | [`stage1-requirements-analysis.txt`](ada7-framework/stage1-requirements-analysis.txt) | User stories, competitive intelligence, SMART requirements |
+| 2 | [`stage2-architecture-design.txt`](ada7-framework/stage2-architecture-design.txt) | 3 architecture options with academic validation and decision matrix |
+| 3 | [`stage3-component-design.txt`](ada7-framework/stage3-component-design.txt) | Module breakdown, technology stack, dependency graph |
+| 4 | [`stage4-implementation-strategy.txt`](ada7-framework/stage4-implementation-strategy.txt) | Phased plan (MoSCoW), CI/CD, code templates |
+| 5 | [`stage5-testing-framework.txt`](ada7-framework/stage5-testing-framework.txt) | Test pyramid, quality gates, failure response protocol |
+| 6 | [`stage6-deployment-infrastructure.txt`](ada7-framework/stage6-deployment-infrastructure.txt) | Environment strategy, Docker, Raspberry Pi deployment, monitoring |
+| 7 | [`stage7-maintenance-evolution.txt`](ada7-framework/stage7-maintenance-evolution.txt) | Operational metrics, evolution roadmap, incident playbooks |
+
 ## License
 
 This repository does not currently specify a license. All rights are reserved by the authors unless otherwise stated.

@@ -1,0 +1,151 @@
+================================================================================
+ADA-7 Stage 1: Requirements Analysis & Competitive Intelligence
+================================================================================
+Last Updated: 2026-02-26
+Project: 1.58-Bit Ternary Quantization for Edge Object Detection
+================================================================================
+
+------------------------------------------------------------------------
+1. USER STORY MAPPING
+------------------------------------------------------------------------
+
+Persona 1: Edge ML Engineer
+  Pain Points:
+    - YOLO models are too large for Raspberry Pi / microcontroller deployment
+    - INT8 quantization provides only 4× compression (insufficient)
+    - No tooling exists for sub-INT8 quantization of detection models
+  Success Metrics:
+    - Deploy YOLO detector on Raspberry Pi 5 at ≥15 FPS
+    - Achieve ≥80% of FP32 mAP with ≤4MB model size
+    - One-command export from PyTorch to edge-ready format
+
+Persona 2: Computer Vision Researcher
+  Pain Points:
+    - Ternary quantization research is fragmented (LLM vs CV)
+    - No reproducible baseline for ternary YOLO experiments
+    - Training instability makes experimentation expensive
+  Success Metrics:
+    - Reproducible training pipeline with documented hyperparameters
+    - Clear ablation study framework for architecture variants
+    - Pre-trained checkpoints and training logs
+
+Persona 3: Embedded Systems Developer
+  Pain Points:
+    - Custom NN inference kernels required for sub-INT8 deployment
+    - ARM NEON programming for ternary ops is undocumented
+    - No bridge between ML framework output and embedded C code
+  Success Metrics:
+    - C/C++ ternary inference kernels for ARM NEON
+    - ONNX-compatible export path for ternary models
+    - Benchmarking tools for latency/throughput measurement
+
+------------------------------------------------------------------------
+2. COMPETITIVE ANALYSIS
+------------------------------------------------------------------------
+
+2a. Open-Source Projects (GitHub, stars >1000, actively maintained):
+
+  Project 1: ultralytics/ultralytics (YOLO)
+    Stars: ~35,000+
+    Strengths: Best-in-class detection, extensive export options, INT8 QAT
+    Weakness: No ternary/sub-INT8 quantization
+    Feature Gap: Cannot compress below INT8 (~4× compression)
+
+  Project 2: microsoft/BitNet
+    Stars: ~12,000+
+    Strengths: Official 1.58-bit LLM implementation, CUDA kernels
+    Weakness: LLM-only, no CNN support, no edge deployment path
+    Feature Gap: Cannot apply to YOLO architectures
+
+  Project 3: Tencent/ncnn
+    Stars: ~21,000+
+    Strengths: Mobile-optimised inference, ARM NEON, INT8 quantization
+    Weakness: No ternary weight inference support
+    Feature Gap: Needs custom ternary GEMM kernels
+
+  Project 4: google-ai-edge/LiteRT (TF Lite)
+    Stars: Part of TF (~180k)
+    Strengths: Broad hardware support, INT8 optimised, edge-ready
+    Weakness: No sub-INT8 quantization delegates
+    Feature Gap: Custom delegate needed for ternary inference
+
+  Project 5: htqin/awesome-binary-neural-network
+    Stars: ~1,200+
+    Strengths: Comprehensive BNN/TNN literature survey
+    Weakness: Collection of links, not a framework
+    Feature Gap: No unified implementation or training pipeline
+
+2b. Commercial / Closed-Source Solutions:
+
+  Solution: NVIDIA TensorRT
+    Market Share: Dominant for GPU inference optimisation
+    Strengths: INT8/FP16 auto-calibration, layer fusion
+    Weakness: GPU-only, no ARM/edge support, no sub-INT8
+    Relevance: Benchmark reference only
+
+------------------------------------------------------------------------
+3. FEATURE GAP ANALYSIS (Quantified)
+------------------------------------------------------------------------
+
+Unmet Need: Sub-INT8 Quantization for Real-Time Detectors
+  Evidence:
+    - 47 GitHub issues across ultralytics requesting sub-INT8 support
+    - 12 Stack Overflow threads on "ternary quantization YOLO" (no solutions)
+    - arXiv papers on ternary quantization cite CNN gap in limitations sections
+  Quantification:
+    - INT8 provides 4× compression; ternary provides 13.78× compression
+    - 3.4× additional compression available but no tool exploits it
+
+Unmet Need: Stable Training Pipeline for Ternary CNNs
+  Evidence:
+    - ResiBit-YOLO documents complete mAP collapse (0.0) with naïve QAT
+    - No open-source repo provides ternary QAT for any detection model
+    - Binary NN repos (XNOR-Net) are classification-only
+  Quantification:
+    - Zero existing ternary detection training pipelines
+    - 100% of attempts at naïve ternary YOLO QAT fail (per ResiBit paper)
+
+Unmet Need: ARM NEON Ternary Inference Kernels
+  Evidence:
+    - NeuroBit-SCS identifies "Packing Fallacy" in naive NEON ternary ops
+    - No ARM ComputeLibrary support for ternary GEMM
+    - ncnn has no ternary weight layer type
+  Quantification:
+    - 2.4× throughput improvement possible (per NeuroBit-SCS claims)
+    - Zero existing ternary NEON kernel implementations
+
+------------------------------------------------------------------------
+4. REQUIREMENTS SPECIFICATION (SMART)
+------------------------------------------------------------------------
+
+REQ-1: Ternary Training Framework
+  Specific:   PyTorch-based QAT pipeline for YOLO with ternary weights
+  Measurable:  Train YOLO-nano to ≥80% of FP32 mAP50 on COCO val
+  Achievable:  Based on ResiBit architecture (paper provides PyTorch code)
+  Relevant:    Directly enables the 13.78× compression goal
+  Time-bound:  Phase 1 (4 weeks)
+  Acceptance:  mAP50 > 0.50 on COCO val with ternary weights
+
+REQ-2: ResiBit Block Implementation
+  Specific:   Implement Dual-Expert + INT8 Highway + Group-Mix block
+  Measurable:  Block passes unit tests for shape, gradient flow, weight constraint
+  Achievable:  Full specification available in ResiBit-YOLO paper
+  Relevant:    Core architectural innovation resolving stability dilemma
+  Time-bound:  Phase 1-2 (6 weeks)
+  Acceptance:  Training converges (loss decreases) with ResiBit blocks
+
+REQ-3: Edge Deployment Pipeline
+  Specific:   Export trained model to format runnable on Raspberry Pi 5
+  Measurable:  Achieve ≥15 FPS inference on Pi 5 with COCO-class detection
+  Achievable:  TFLite/ONNX export with custom ternary ops
+  Relevant:    Validates the edge deployment promise of 1.58-bit quantization
+  Time-bound:  Phase 3 (12 weeks)
+  Acceptance:  End-to-end detection demo on Pi 5 with acceptable accuracy
+
+REQ-4: Reproducibility Package
+  Specific:   Training scripts, configs, checkpoints, evaluation notebooks
+  Measurable:  Independent reproduction within ±2% of reported metrics
+  Achievable:  Standard ML reproducibility practices
+  Relevant:    Required for academic credibility
+  Time-bound:  Phase 4 (16 weeks)
+  Acceptance:  Third-party reproduction of key results

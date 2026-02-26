@@ -1,0 +1,161 @@
+================================================================================
+ADA-7 Stage 5: Testing Framework & Quality Assurance
+================================================================================
+Last Updated: 2026-02-26
+Project: 1.58-Bit Ternary Quantization for Edge Object Detection
+================================================================================
+
+------------------------------------------------------------------------
+1. TESTING STRATEGY PYRAMID
+------------------------------------------------------------------------
+
+1a. Unit Tests (Target: >80% coverage with mutation testing)
+
+  Test Suite: test_ternary_conv.py
+    - test_forward_shape: Output shape matches standard Conv2d
+    - test_weight_ternary: Weights are in {-1, 0, +1} after quantization
+    - test_gradient_flow: Gradients pass through STE correctly
+    - test_threshold_behavior: Zero threshold produces sign function
+    - test_gradient_clipping: Gradients clipped for |w| > 1.0
+
+  Test Suite: test_dual_expert.py
+    - test_channel_split: SCS divides channels correctly
+    - test_expert_independence: Texture/Shape experts have separate weights
+    - test_output_shape: Block output matches input spatial dimensions
+    - test_merge_correctness: Channel concatenation is correct
+
+  Test Suite: test_resibit_block.py
+    - test_forward_shape: Output shape preserved
+    - test_int8_highway: INT8 path produces valid output
+    - test_group_mix: Aggregation combines all streams correctly
+    - test_precision_funnel: INT8 scale decreases with epoch
+
+  Test Suite: test_spectral_loss.py
+    - test_orthogonal_features: Loss = 0 for orthogonal inputs
+    - test_identical_features: Loss is maximised for identical inputs
+    - test_gradient_exists: Loss produces non-zero gradients
+    - test_fft_dimensions: FFT operates on correct spatial dimensions
+
+  Mutation Testing:
+    Tool: mutmut (Python mutation testing)
+    Target: >70% mutation kill rate for core layers
+    Focus: STE backward pass, threshold computation, channel split logic
+
+1b. Integration Tests (API contract + data pipeline)
+
+  Test Suite: test_training_loop.py
+    - test_overfit_single_batch: Model can memorise 1 batch (loss → 0)
+    - test_loss_decreases: Loss decreases over 10 epochs on tiny dataset
+    - test_checkpoint_save_load: Model state restored correctly
+    - test_gradient_monitoring: Gradient norms logged correctly
+    - test_weight_distribution: Dead-zero percentage tracked
+
+  Test Suite: test_export_pipeline.py
+    - test_base5_conversion: Fused weights in {-2,-1,0,1,2}
+    - test_onnx_export: Model exports to valid ONNX graph
+    - test_onnx_inference: ONNX model produces same output as PyTorch
+    - test_tflite_conversion: ONNX → TFLite conversion succeeds
+
+1c. End-to-End Tests (User journey with realistic data)
+
+  Test Suite: test_e2e_coco.py (requires GPU + COCO dataset)
+    - test_fp32_baseline: YOLO-nano FP32 mAP50 ≥ 0.63
+    - test_ternary_collapse: Naive ternary QAT mAP50 < 0.05
+    - test_resibit_recovery: ResiBit mAP50 ≥ 0.50 (conservative target)
+    - test_deployment_equivalence: PyTorch and exported model agree
+
+1d. Performance Tests (Load testing with throughput targets)
+
+  Benchmark Suite: benchmark_inference.py
+    - benchmark_fp32_gpu: FP32 GPU inference latency (baseline)
+    - benchmark_int8_gpu: INT8 GPU inference latency
+    - benchmark_ternary_gpu: Ternary GPU inference latency
+    - benchmark_pi5_tflite: TFLite inference on Raspberry Pi 5
+    Throughput Targets:
+      - GPU FP32: ≥100 FPS (RTX 3090)
+      - GPU INT8: ≥200 FPS
+      - Pi 5 TFLite: ≥15 FPS
+
+------------------------------------------------------------------------
+2. QUALITY GATES
+------------------------------------------------------------------------
+
+Gate 1: Pre-Commit (automated, every commit)
+  - ruff check: No E/W/F errors
+  - mypy: No type errors in core modules
+  - Unit tests: All pass
+  - Coverage: ≥80% for src/layers/, src/losses/
+
+Gate 2: Pre-Merge (automated, every PR)
+  - All Gate 1 checks pass
+  - Integration tests: All pass
+  - No new security vulnerabilities (safety check)
+  - Documentation: Docstrings for all public functions
+
+Gate 3: Release (manual review + automated)
+  - All Gate 2 checks pass
+  - E2E tests on COCO: Key metrics within tolerance
+  - Performance benchmarks: No regression >5%
+  - Reproducibility: Training from scratch matches checkpoints ±2%
+
+------------------------------------------------------------------------
+3. AUTOMATED VULNERABILITY SCANNING
+------------------------------------------------------------------------
+
+OWASP Compliance (applicable categories):
+  - A04 Insecure Design: Model serialisation uses safe loading (weights_only)
+  - A06 Vulnerable Components: Pin all dependency versions
+  - A08 Software Integrity: Checkpoint hash verification
+
+Tools:
+  - safety check: Scan Python dependencies for known CVEs
+  - bandit: Static analysis for Python security issues
+  - pip-audit: Audit installed packages
+
+------------------------------------------------------------------------
+4. FAILURE RESPONSE PROTOCOL
+------------------------------------------------------------------------
+
+4a. Training Failure: mAP Does Not Improve
+
+  Root Cause Analysis:
+    Step 1: Check gradient norms (detect Muon Trap / gradient explosion)
+    Step 2: Check weight distributions (detect dead-zero collapse)
+    Step 3: Check loss components (detection vs spectral orthogonality)
+    Step 4: Compare with FP32 baseline training dynamics
+
+  Decision Framework:
+    IF gradient_norm > 100: Quick fix → reduce learning rate
+    IF dead_zero_pct > 50%: Quick fix → increase INT8 highway width
+    IF loss_nan: Quick fix → add gradient clipping
+    IF none_of_above: Sustainable fix → review architecture design
+
+  Rollback Procedure:
+    1. Load last successful checkpoint
+    2. Reduce learning rate by 10×
+    3. Increase warmup epochs by 2×
+    4. Re-enable full INT8 highway (Precision Funnel = 1.0)
+
+4b. Deployment Failure: Inference Accuracy Mismatch
+
+  Root Cause Analysis:
+    Step 1: Compare PyTorch vs ONNX output (max absolute difference)
+    Step 2: Check quantization rounding (ternary weights match)
+    Step 3: Verify Base-5 fusion arithmetic
+
+  Rollback Procedure:
+    1. Skip Base-5 fusion, deploy dual-stream model
+    2. Fall back to INT8 quantization if ternary deployment fails
+    3. Report accuracy gap with detailed layer-by-layer analysis
+
+4c. Performance Failure: Below Throughput Target
+
+  Root Cause Analysis:
+    Step 1: Profile inference (identify bottleneck layers)
+    Step 2: Check memory bandwidth utilisation
+    Step 3: Verify ARM NEON kernel is being used (not fallback)
+
+  Mitigation:
+    1. Reduce model width (fewer channels)
+    2. Reduce input resolution (640 → 416 → 320)
+    3. Enable TFLite XNNPACK delegate for optimised inference

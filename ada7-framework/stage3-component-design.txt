@@ -1,0 +1,202 @@
+================================================================================
+ADA-7 Stage 3: Component Design & Technology Stack
+================================================================================
+Last Updated: 2026-02-26
+Project: 1.58-Bit Ternary Quantization for Edge Object Detection
+================================================================================
+
+------------------------------------------------------------------------
+1. COMPONENT BREAKDOWN
+------------------------------------------------------------------------
+
+Component 1: TernaryConv2d Layer
+  Purpose: Drop-in replacement for nn.Conv2d with ternary weight quantization
+  Interface:
+    Input:  Tensor (N, C_in, H, W) — standard feature map
+    Output: Tensor (N, C_out, H, W) — convolved feature map
+    Params: weight_full (FP32, for training), weight_ternary (computed)
+  Dependencies: torch, torch.autograd (for STE custom gradient)
+  Estimated Size: ~150 lines Python
+
+Component 2: StraightThroughEstimator (STE)
+  Purpose: Custom autograd function for ternary quantization gradient
+  Interface:
+    Forward: w_ternary = sign(w_full) * (|w_full| > threshold)
+    Backward: grad_input = grad_output (straight-through)
+  Dependencies: torch.autograd.Function
+  Estimated Size: ~30 lines Python
+
+Component 3: DualExpertBlock
+  Purpose: Static Channel Splitting into Texture and Shape expert paths
+  Interface:
+    Input:  Tensor (N, C, H, W)
+    Output: Tensor (N, C, H, W)
+    Sub-components:
+      - channel_split: Divides C into C_texture and C_shape
+      - texture_expert: TernaryConv2d for high-frequency features
+      - shape_expert: TernaryConv2d for low-frequency features
+      - merge: Concatenation along channel dimension
+  Dependencies: TernaryConv2d
+  Estimated Size: ~100 lines Python
+
+Component 4: ResiBitBlock
+  Purpose: Core building block combining dual experts with INT8 highway
+  Interface:
+    Input:  Tensor (N, C, H, W)
+    Output: Tensor (N, C, H, W)
+    Sub-components:
+      - dual_expert: DualExpertBlock (ternary)
+      - int8_highway: nn.Conv2d with INT8 quantization
+      - group_mix: Aggregation of ternary and INT8 outputs
+  Dependencies: DualExpertBlock, torch.quantization
+  Estimated Size: ~150 lines Python
+
+Component 5: SpectralOrthogonalityLoss
+  Purpose: Regularizer enforcing frequency-domain specialization of experts
+  Interface:
+    Input:  texture_features, shape_features (intermediate activations)
+    Output: Scalar loss value
+    Method: 2D FFT of feature maps → cosine similarity → minimise
+  Dependencies: torch.fft
+  Estimated Size: ~50 lines Python
+
+Component 6: PrecisionFunnel
+  Purpose: Training schedule that progressively reduces INT8 highway weight
+  Interface:
+    Input:  current_epoch, total_epochs
+    Output: int8_scale_factor (1.0 → 0.0 over training)
+  Dependencies: None (pure scheduling logic)
+  Estimated Size: ~30 lines Python
+
+Component 7: QATTrainer
+  Purpose: Quantization-aware training loop with monitoring
+  Interface:
+    Input:  model, dataloader, optimizer, loss_fn, config
+    Output: trained model, training logs
+    Features:
+      - Gradient norm monitoring (detect Muon Trap)
+      - Weight distribution logging (detect dead-zero collapse)
+      - Checkpoint management with rollback capability
+  Dependencies: torch, ultralytics (for YOLO data pipeline)
+  Estimated Size: ~300 lines Python
+
+Component 8: Base5Converter
+  Purpose: Fuse dual ternary experts into single quinary deployment model
+  Interface:
+    Input:  Trained ResiBit model
+    Output: Deployment model with quinary {-2,-1,0,1,2} weights
+    Method: W_fused = W_A + W_B for each DualExpertBlock
+  Dependencies: torch
+  Estimated Size: ~100 lines Python
+
+------------------------------------------------------------------------
+2. DATA FLOW DIAGRAM
+------------------------------------------------------------------------
+
+Training Pipeline:
+  COCO Dataset
+    → DataLoader (augmentation, mosaic, mixup)
+      → YOLO Backbone (with ResiBit blocks)
+        → Detection Head (classification + regression)
+          → Loss Computation (detection + spectral orthogonality)
+            → Backpropagation (STE for ternary, standard for INT8)
+              → Optimizer Step (AdamW with warmup)
+                → PrecisionFunnel Update
+                  → Checkpoint Save
+
+Deployment Pipeline:
+  Trained ResiBit Model
+    → Base5Converter (fuse dual experts)
+      → INT8 Highway Pruning (optional)
+        → ONNX Export
+          → TFLite Conversion (with custom ternary ops)
+            → ARM NEON Inference Runtime
+
+------------------------------------------------------------------------
+3. TECHNOLOGY SELECTION
+------------------------------------------------------------------------
+
+3a. Training Framework
+  Primary: PyTorch 2.1+ (with torch.compile support)
+    Rationale: Native autograd for custom STE, ultralytics compatibility
+  Alternative: JAX/Flax
+    Migration Complexity: HIGH (ultralytics is PyTorch-only)
+  Benchmark: PyTorch 2.1 with torch.compile: ~1.3× speedup over eager mode
+
+3b. YOLO Baseline
+  Primary: ultralytics 8.1+ (YOLOv8-nano or YOLO11-nano)
+    Rationale: Best-maintained YOLO framework, extensive docs
+  Alternative: YOLOX (Megvii)
+    Migration Complexity: MEDIUM (different head architecture)
+  Benchmark: YOLOv8-nano FP32: mAP50 = 0.64 on COCO val
+
+3c. Quantization Library
+  Primary: PyTorch Quantization (torch.ao.quantization)
+    Rationale: Native INT8 QAT support, integrates with autograd
+  Alternative: NVIDIA TensorRT Quantization Toolkit
+    Migration Complexity: LOW (post-training only)
+  Benchmark: PyTorch INT8 QAT retains ~98% FP32 accuracy
+
+3d. Dataset Management
+  Primary: COCO 2017 (118K train, 5K val)
+    Rationale: Standard benchmark used in all repository papers
+  Alternative: PASCAL VOC 2012 (for faster iteration)
+    Migration Complexity: LOW (standard detection format)
+
+3e. Experiment Tracking
+  Primary: Weights & Biases (wandb)
+    Rationale: Gradient/weight distribution logging, hyperparameter sweeps
+  Alternative: TensorBoard
+    Migration Complexity: LOW
+
+3f. Edge Deployment
+  Primary: TensorFlow Lite (via ONNX → TFLite conversion)
+    Rationale: Best Raspberry Pi support, INT8 delegate available
+  Alternative: ncnn
+    Migration Complexity: MEDIUM (custom layer definition needed)
+  Alternative: ONNX Runtime (ARM build)
+    Migration Complexity: LOW
+
+------------------------------------------------------------------------
+4. DEPENDENCY GRAPH
+------------------------------------------------------------------------
+
+  torch >= 2.1.0
+    ├── torchvision >= 0.16.0
+    ├── torch.fft (built-in)
+    └── torch.ao.quantization (built-in)
+
+  ultralytics >= 8.1.0
+    └── (depends on torch)
+
+  numpy >= 1.24.0
+  scipy >= 1.11.0 (for spectral analysis utilities)
+
+  wandb >= 0.16.0 (experiment tracking)
+  matplotlib >= 3.8.0 (visualization)
+
+  # Edge deployment (separate environment)
+  onnx >= 1.15.0
+  onnxruntime >= 1.16.0
+  tflite-runtime >= 2.14.0 (Raspberry Pi)
+
+  # No circular dependencies identified.
+
+------------------------------------------------------------------------
+5. DEVELOPMENT ESTIMATES
+------------------------------------------------------------------------
+
+| Component              | Story Points | Hours | Calendar Days | Confidence |
+|------------------------|-------------|-------|---------------|------------|
+| TernaryConv2d + STE    |      3      |   8   |       2       |    HIGH    |
+| DualExpertBlock        |      5      |  16   |       3       |    HIGH    |
+| ResiBitBlock           |      5      |  16   |       3       |   MEDIUM   |
+| SpectralOrthoLoss      |      3      |   8   |       2       |   MEDIUM   |
+| PrecisionFunnel        |      2      |   4   |       1       |    HIGH    |
+| QATTrainer             |      8      |  32   |       5       |   MEDIUM   |
+| Base5Converter         |      3      |  12   |       2       |    HIGH    |
+| YOLO Integration       |      8      |  32   |       5       |   MEDIUM   |
+| COCO Eval Pipeline     |      3      |   8   |       2       |    HIGH    |
+| ARM NEON Kernels       |     13      |  60   |      10       |    LOW     |
+|------------------------|-------------|-------|---------------|------------|
+| TOTAL                  |     53      | 196   |      35       |            |

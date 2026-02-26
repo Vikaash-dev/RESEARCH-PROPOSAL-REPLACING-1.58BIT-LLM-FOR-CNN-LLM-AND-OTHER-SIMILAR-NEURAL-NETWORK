@@ -1,0 +1,172 @@
+================================================================================
+ADA-7 Stage 6: Deployment & Infrastructure Management
+================================================================================
+Last Updated: 2026-02-26
+Project: 1.58-Bit Ternary Quantization for Edge Object Detection
+================================================================================
+
+------------------------------------------------------------------------
+1. ENVIRONMENT STRATEGY
+------------------------------------------------------------------------
+
+1a. Development Environment (Local)
+  Hardware: GPU workstation (NVIDIA RTX 3090+ recommended)
+  OS: Ubuntu 22.04 or Windows 11 (WSL2)
+  Setup:
+    - Python 3.11 with venv
+    - PyTorch 2.1+ with CUDA 12.1
+    - ultralytics for YOLO backbone
+    - Hot reloading via pytest-watch for test-driven development
+    - VS Code with Python, Pylance, Jupyter extensions
+  Debugging:
+    - PyTorch profiler for performance analysis
+    - wandb for experiment tracking and visualization
+    - torch.autograd.detect_anomaly() for gradient debugging
+
+1b. Staging Environment (Cloud)
+  Platform: AWS EC2 or Google Cloud (GPU instances)
+  Instance: p3.2xlarge (V100) or g5.xlarge (A10G)
+  Setup:
+    - Docker container with training environment
+    - COCO dataset mounted from cloud storage (S3/GCS)
+    - wandb integration for remote experiment monitoring
+  Testing:
+    - Full COCO training runs (300 epochs)
+    - Performance benchmarking with production-like data
+    - Memory profiling to ensure Pi 5 compatibility
+
+1c. Production Environment (Edge Target)
+  Hardware: Raspberry Pi 5 (8GB RAM)
+  OS: Raspberry Pi OS (64-bit, Debian Bookworm)
+  Runtime: TFLite with XNNPACK delegate
+  Setup:
+    - tflite-runtime 2.14+
+    - OpenCV for camera input
+    - systemd service for auto-start
+  Monitoring:
+    - CPU temperature and throttling detection
+    - FPS counter and latency histogram
+    - Memory usage tracking
+
+------------------------------------------------------------------------
+2. INFRASTRUCTURE AS CODE
+------------------------------------------------------------------------
+
+2a. Docker Training Environment:
+
+  # Dockerfile
+  FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-devel
+
+  WORKDIR /workspace
+
+  # System dependencies
+  RUN apt-get update && apt-get install -y \
+      libgl1-mesa-glx libglib2.0-0 git && \
+      rm -rf /var/lib/apt/lists/*
+
+  # Python dependencies
+  COPY requirements.txt .
+  RUN pip install --no-cache-dir -r requirements.txt
+
+  # Source code
+  COPY src/ src/
+  COPY configs/ configs/
+  COPY scripts/ scripts/
+
+  # Default command
+  CMD ["python", "scripts/train.py", "--config", "configs/train_resibit.yaml"]
+
+2b. Raspberry Pi Deployment Script:
+
+  #!/bin/bash
+  # deploy_pi5.sh — Deploy ResiBit-YOLO to Raspberry Pi 5
+
+  set -e
+
+  # Install runtime dependencies
+  sudo apt-get update
+  sudo apt-get install -y python3-pip libopencv-dev
+  pip3 install tflite-runtime opencv-python-headless
+
+  # Copy model
+  mkdir -p ~/resibit-yolo/models
+  cp resibit_yolo_quinary.tflite ~/resibit-yolo/models/
+
+  # Copy inference script
+  cp scripts/infer_pi5.py ~/resibit-yolo/
+
+  # Create systemd service (optional)
+  sudo cp deploy/resibit-yolo.service /etc/systemd/system/
+  sudo systemctl enable resibit-yolo
+  sudo systemctl start resibit-yolo
+
+  echo "Deployment complete. Run: python3 ~/resibit-yolo/infer_pi5.py"
+
+2c. Database / Experiment Tracking:
+  - wandb (cloud): Experiment metadata, metrics, artifacts
+  - Local SQLite: Inference logs on Raspberry Pi (detection results)
+  - No traditional database required (ML pipeline, not web service)
+
+------------------------------------------------------------------------
+3. SECURITY IMPLEMENTATION
+------------------------------------------------------------------------
+
+3a. Model Security:
+  - Safe model loading: torch.load(..., weights_only=True) in PyTorch 2.1+
+  - Checkpoint integrity: SHA-256 hash stored alongside .pt files
+  - No pickle-based deserialization of untrusted models
+
+3b. Data Security:
+  - COCO dataset: Public dataset, no PII concerns
+  - Training logs: No sensitive data in wandb logs
+  - Edge deployment: Camera feed processed locally, no cloud upload
+
+3c. Dependency Security:
+  - Pin all dependency versions in requirements.txt
+  - Run safety check and pip-audit in CI pipeline
+  - Review dependency changelogs before version updates
+
+3d. Edge Device Security:
+  - Raspberry Pi: SSH key-based authentication only
+  - Model file: Read-only permissions on deployment
+  - Network: No inbound connections required for inference
+
+------------------------------------------------------------------------
+4. MONITORING & OBSERVABILITY
+------------------------------------------------------------------------
+
+4a. Training Monitoring (wandb):
+  Metrics:
+    - Loss: total, detection, spectral_orthogonality
+    - Accuracy: mAP50, mAP50-95 (per epoch)
+    - Gradient: norm_total, norm_per_layer, dead_zero_percentage
+    - Weight: distribution_histogram, ternary_ratio
+    - System: GPU utilization, memory usage, training speed (iter/s)
+  Alerts:
+    - Gradient norm > 100: WARNING (potential Muon Trap)
+    - Dead-zero percentage > 40%: CRITICAL (weight collapse)
+    - Loss NaN: CRITICAL (training divergence)
+
+4b. Edge Inference Monitoring:
+  Metrics:
+    - Inference latency: mean, p50, p95, p99 (ms)
+    - Throughput: FPS (frames per second)
+    - Detection count: objects detected per frame
+    - System: CPU temperature, memory usage, CPU utilization
+  Logging:
+    - Local CSV file with per-frame metrics
+    - Rotating log files (max 100MB)
+  Alerts:
+    - FPS < 10: WARNING (performance degradation)
+    - CPU temperature > 80°C: CRITICAL (thermal throttling)
+    - Memory usage > 90%: WARNING
+
+4c. SLA Definitions:
+  Training:
+    - 300-epoch COCO training completes in ≤72 hours (single V100)
+    - wandb logging available throughout training
+    - Checkpoint saved every 10 epochs
+  Inference (Pi 5):
+    - ≥15 FPS sustained at 640×640 input resolution
+    - ≤100ms p99 latency per frame
+    - ≥99% uptime (systemd auto-restart on failure)
