@@ -137,8 +137,9 @@ class TestSTEVarianceAnalysis:
     def test_int8_much_lower_variance(self):
         """INT8 should have much lower gradient variance than ternary.
 
-        Paper claims ~85× but theoretical bound gives ~16,000× based on
-        step size ratio squared: (1.0 / (2/254))^2 = (127)^2 = 16,129.
+        For 255 levels, step delta = 2/(255-1) = 2/254, so the variance
+        ratio is (delta_ternary / delta_255)^2 = (1.0 / (2/254))^2
+        = (127)^2 = 16,129.
         """
         ratio = compute_ste_gradient_variance_ratio(255)
         assert ratio > 1000, f"INT8 variance ratio should be >>1000, got {ratio}"

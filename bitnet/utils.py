@@ -280,7 +280,7 @@ def compute_quantization_mse(layer: nn.Conv2d) -> float:
 def compute_mix_diversification_loss(model: nn.Module) -> torch.Tensor:
     """Diversification penalty on Group-Mix coefficients.
 
-    Addresses the open question from Paper Section 5.4:
+    Addresses the open question from ResiBit-YOLO paper Section 5.4:
       "A diversification penalty on the mixing coefficients, analogous
        to the auxiliary loss in Mixture-of-Experts LLMs [Shazeer et al.,
        2017], should be added to the training objective."

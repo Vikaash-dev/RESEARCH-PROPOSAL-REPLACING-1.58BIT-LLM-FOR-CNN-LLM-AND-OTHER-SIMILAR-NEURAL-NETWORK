@@ -176,8 +176,10 @@ def compute_ste_gradient_variance_ratio(n_levels: int) -> float:
     Returns:
         Gradient variance ratio relative to ternary (n=3).
     """
+    if n_levels < 2:
+        return 1.0
     delta_ternary = 2.0 / (3 - 1)      # = 1.0
-    delta_n = 2.0 / (n_levels - 1) if n_levels > 1 else 2.0
+    delta_n = 2.0 / (n_levels - 1)
     # Ratio: var(ternary) / var(n)
     return (delta_ternary / delta_n) ** 2
 
