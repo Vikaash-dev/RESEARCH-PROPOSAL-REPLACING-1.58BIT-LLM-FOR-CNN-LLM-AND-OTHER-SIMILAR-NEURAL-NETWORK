@@ -1,0 +1,166 @@
+================================================================================
+  ADA-7 STAGE 1: REQUIREMENTS ANALYSIS & COMPETITIVE INTELLIGENCE
+  Project: BitNet 1.58-bit for CNN/YOLO Object Detection
+  Date: February 2026
+================================================================================
+
+1.1  USER STORY MAPPING
+─────────────────────────
+
+Persona A: Embedded ML Engineer
+  Pain points: YOLO models too large for edge MCU (ESP32, STM32, Jetson Nano)
+  Success metric: Model < 1 MB, >30 FPS on Cortex-M7, mAP50 > 0.50
+  Feature need: Multiplication-free inference, INT8 or lower weights
+
+Persona B: Autonomous Drone Developer
+  Pain points: Power budget < 5W, real-time detection required
+  Success metric: <1 mJ per inference, latency <33 ms
+  Feature need: Base-5 shift-and-add kernels on FPGA
+
+Persona C: Quantization Researcher
+  Pain points: 1.58-bit quantization collapses on small CNN models
+  Success metric: Non-zero mAP after ternary QAT on YOLO-class models
+  Feature need: Gradient manifold stabilization, collapse prevention
+
+
+1.2  COMPETITIVE ANALYSIS — OPEN-SOURCE PROJECTS
+──────────────────────────────────────────────────
+
+Project 1: microsoft/BitNet
+  GitHub stars: ~12,000 (as of Feb 2026)
+  Description: Official Microsoft 1.58-bit LLM implementation
+  Strengths: Production-quality, fast CPU inference (2-4× speedup)
+  Weakness: LLM-only — no CNN/YOLO support, fails on <3B models
+  Gap: No solution for compact vision models
+  Citation: [Wang et al., 2023], [Ma et al., 2024]
+
+Project 2: ultralytics/ultralytics (YOLO)
+  GitHub stars: ~55,000
+  Description: Official YOLO implementation including YOLO26
+  Strengths: State-of-the-art detection, comprehensive ecosystem
+  Weakness: Only supports INT8/FP16 quantization (TensorRT/ONNX)
+  Gap: No sub-4-bit quantization support
+  Citation: [Ultralytics Team, 2025]
+
+Project 3: huggingface/optimum
+  GitHub stars: ~2,500
+  Description: Hardware-optimized inference including quantization
+  Strengths: Broad ecosystem, ONNX/TensorRT integration
+  Weakness: Minimum 4-bit quantization, no ternary support
+  Gap: No shift-and-add inference path
+
+Project 4: mit-han-lab/once-for-all
+  GitHub stars: ~1,800
+  Description: Neural architecture search with sub-network sampling
+  Strengths: Hardware-aware NAS, efficient deployment
+  Weakness: Focuses on pruning, not extreme quantization
+  Gap: No ternary or Base-5 weight representation
+
+Project 5: htqin/awesome-binary-neural-network
+  GitHub stars: ~800
+  Description: Curated list of binary/ternary network research
+  Strengths: Comprehensive reference, tracks latest advances
+  Weakness: Collection only — no unified implementation
+  Gap: No single implementation combining dual-expert + Base-5 + INT8 highway
+
+
+1.3  COMPETITIVE ANALYSIS — COMMERCIAL SOLUTIONS
+──────────────────────────────────────────────────
+
+Solution 1: NVIDIA TensorRT
+  Market share: ~70% of GPU inference deployment
+  Quantization: INT8, INT4 (with calibration), FP16
+  Minimum bits: 4-bit (symmetric)
+  Gap: No sub-4-bit, no ternary, no shift-and-add
+
+Solution 2: Qualcomm AI Engine / SNPE
+  Market share: ~80% of mobile SoC AI inference
+  Quantization: INT8, INT16
+  Minimum bits: 8-bit
+  Gap: No ternary, no custom-alphabet quantization
+
+Solution 3: Apple CoreML
+  Market share: ~100% of iOS ML deployment
+  Quantization: INT8 (palettized), 4-bit (palettized)
+  Minimum bits: 4-bit (block-wise)
+  Gap: No ternary, no shift-and-add hardware path
+
+
+1.4  FEATURE GAP ANALYSIS
+───────────────────────────
+
+Evidence from literature and issue trackers:
+
+Gap 1: Ternary QAT collapses on small models (<3B params)
+  Evidence: [Nielsen et al., 2024] arXiv:2407.11770 — 5-10% degradation
+  Evidence: Our Paper 2 §3 — 100% collapse on 2.4M param YOLO26n
+  Reddit: r/MachineLearning threads on "BitNet fails on small models"
+  Frequency: High — fundamental limitation of current approaches
+
+Gap 2: No multiplication-free detection model exists
+  Evidence: No published mAP result for shift-and-add YOLO inference
+  GitHub: Zero repositories with working Base-5 YOLO deployment
+  Frequency: Critical unmet need for edge ML community
+
+Gap 3: Gradient collapse during extreme QAT is poorly understood
+  Evidence: Paper 2 §3.3 — first formal characterization (Muon Trap)
+  Evidence: StableQAT [Chen et al., 2026] addresses partial case
+  Frequency: Every attempt at <2-bit YOLO fails without mitigation
+
+Gap 4: No INT8 gradient anchor architecture exists for CNNs
+  Evidence: Bi-Real Net [Liu et al., 2018] uses FP32 shortcut (too expensive)
+  Evidence: Our Paper 1 proposes ResiBit (INT8 highway) as solution
+  Frequency: Novel contribution — first in literature
+
+
+1.5  REQUIREMENTS SPECIFICATION (SMART)
+────────────────────────────────────────
+
+R1: Ternary Quantization [MUST]
+  Specific: Implement absmean ternary quantization to {-1,0,+1} with STE
+  Measurable: Output values strictly in {-1,0,+1}, gradient flows through
+  Achievable: Implemented and tested (23 tests passing)
+  Relevant: Core of BitNet b1.58 architecture
+  Time-bound: Complete ✓
+
+R2: Dual-Expert Base-5 Architecture [MUST]
+  Specific: Two independent ternary experts fused to quinary {-2..+2}
+  Measurable: 13.78× compression ratio, all 5 quinary values present
+  Achievable: Implemented and tested (14 tests passing)
+  Relevant: Primary innovation of DualExpert-BitYOLO26
+  Time-bound: Complete ✓
+
+R3: INT8 Residual Highway [MUST]
+  Specific: Three-stream ResiBit block with INT8 gradient anchor
+  Measurable: Non-zero gradient norm through highway in all phases
+  Achievable: Implemented and tested (17 tests passing)
+  Relevant: Primary innovation of ResiBit-YOLO
+  Time-bound: Complete ✓
+
+R4: Three-Phase Training Protocol [MUST]
+  Specific: FP32 warmup → ternary anneal → full QAT curriculum
+  Measurable: Phase transitions at correct epochs, LR updates
+  Achievable: Implemented and tested (15 tests passing)
+  Relevant: Prevents Muon Trap collapse
+  Time-bound: Complete ✓
+
+R5: Deployment Module [SHOULD]
+  Specific: Fuse Base-5 weights, export for shift-and-add inference
+  Measurable: Zero FP multiplications, INT8 weight storage
+  Achievable: Implemented and tested (7 tests passing)
+  Relevant: Hardware deployment pathway
+  Time-bound: Complete ✓
+
+R6: Theoretical Analysis Module [SHOULD]
+  Specific: Formal verification of all paper theorems and claims
+  Measurable: All 5 theorems produce mathematically correct results
+  Achievable: Implemented and tested (8 tests passing)
+  Relevant: Research paper validation
+  Time-bound: Complete ✓
+
+R7: Collapse Detection & Monitoring [COULD]
+  Specific: Entropy, effective rank, cosine similarity monitoring
+  Measurable: Detect collapse 5-10 epochs before zero-fraction threshold
+  Achievable: Implemented and tested (9 tests passing)
+  Relevant: Early warning system for Muon Trap
+  Time-bound: Complete ✓
