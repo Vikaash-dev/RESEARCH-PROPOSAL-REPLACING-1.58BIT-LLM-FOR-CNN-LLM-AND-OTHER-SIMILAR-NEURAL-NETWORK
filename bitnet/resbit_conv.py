@@ -16,13 +16,31 @@ experiment. It provides:
   1. Gradient anchor: Well-conditioned STE gradient (256 levels vs 3)
   2. Precision residual: Captures fine-grained info lost by ternary rounding
   3. Deployment flexibility: Only 25% of FP32 bandwidth overhead
+
+Theoretical justification for INT8 highway (STE gradient variance):
+  For n-level quantization with step delta = 2/(n-1):
+    Var[quant_noise] = delta^2/12
+  Ternary (n=3): Var = 1/12 ≈ 0.0833
+  INT8 (n=255):  Var ≈ 5.1e-6
+  Ratio: ~16,322× less variance → much smoother gradient landscape.
+
+References:
+    [1] Ma et al., "The Era of 1-bit LLMs", arXiv:2402.17764, 2024.
+    [2] Esser et al., "Learned Step Size Quantization", ICLR 2020.
 """
+
+import math
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from bitnet.quantization import quantize_ternary_ste, quantize_int8
+from bitnet.quantization import (
+    quantize_ternary_ste,
+    quantize_int8,
+    quantize_int8_per_channel,
+    quantize_activations,
+)
 
 
 class ResiBitConv(nn.Module):
@@ -73,7 +91,14 @@ class ResiBitConv(nn.Module):
         self.w_r = nn.Parameter(torch.randn(*shape) * 0.02)
 
         # --- Group-Mix Coefficients ---
-        self.mix_logits = nn.Parameter(torch.zeros(3, out_channels))
+        # Initialize with bias towards highway (logit=0.5) to ensure
+        # gradient stability from epoch 0. Softmax([0, 0, 0.5]) ≈
+        # [0.30, 0.30, 0.40], giving the highway 40% initial weight.
+        # This follows the paper's insight that the gradient anchor
+        # should have meaningful influence from the start.
+        mix_init = torch.zeros(3, out_channels)
+        mix_init[2, :] = 0.5  # Bias towards highway stream
+        self.mix_logits = nn.Parameter(mix_init)
 
         self.stride = stride
         self.padding = padding
@@ -162,12 +187,12 @@ class ResiBitConv(nn.Module):
             # Phase 2: Ternary experts quantized (annealed), highway frozen
             w_a_eff = self._quantize_ternary_annealed(self.w_a)
             w_b_eff = self._quantize_ternary_annealed(self.w_b)
-            w_r_eff = quantize_int8(self.w_r)
+            w_r_eff = quantize_int8_per_channel(self.w_r)
         else:
             # Phase 3: Full QAT - all quantized
             w_a_eff = quantize_ternary_ste(self.w_a)
             w_b_eff = quantize_ternary_ste(self.w_b)
-            w_r_eff = quantize_int8(self.w_r)
+            w_r_eff = quantize_int8_per_channel(self.w_r)
 
         # Three parallel streams
         y_a = F.conv2d(x, w_a_eff, stride=self.stride, padding=self.padding)

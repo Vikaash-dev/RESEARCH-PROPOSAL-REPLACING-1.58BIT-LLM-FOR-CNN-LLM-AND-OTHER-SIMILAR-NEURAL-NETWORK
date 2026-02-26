@@ -17,7 +17,12 @@ from bitnet.quantization import (
     quantize_ternary,
     quantize_ternary_ste,
     quantize_int8,
+    quantize_int8_per_channel,
     quantize_activations,
+    compute_ste_gradient_variance_ratio,
+    compute_cosine_similarity,
+    compute_weight_entropy,
+    compute_effective_rank,
 )
 from bitnet.bitlinear import BitLinear
 from bitnet.moqe_conv import MoQEConv
@@ -42,7 +47,12 @@ __all__ = [
     "quantize_ternary",
     "quantize_ternary_ste",
     "quantize_int8",
+    "quantize_int8_per_channel",
     "quantize_activations",
+    "compute_ste_gradient_variance_ratio",
+    "compute_cosine_similarity",
+    "compute_weight_entropy",
+    "compute_effective_rank",
     "BitLinear",
     "MoQEConv",
     "ResiBitConv",
