@@ -64,21 +64,21 @@ Concept: Quantization-Aware Training (QAT) for YOLO
   Action:  Implement ternary QAT pipeline with warmup-based mitigation.
 
 ------------------------------------------------------------------------
-2. TECHNOLOGY READINESS ASSESSMENT
+2. TECHNOLOGY READINESS ASSESSMENT (updated 2026-02-26 — post-implementation)
 ------------------------------------------------------------------------
 
 | Component                | Paper Status | Code Exists? | TRL |
 |--------------------------|-------------|--------------|-----|
-| Ternary Conv2d (STE)     | Validated   | Partial*     | 4   |
-| Dual-Expert SCS Block    | Proposed    | No           | 3   |
-| INT8 Residual Highway    | Proposed    | No           | 3   |
-| Spectral Orthogonality   | Proposed    | No           | 2   |
-| Base-5 Quinary Fusion    | Proposed    | No           | 3   |
-| Group-Mix Aggregation    | Proposed    | No           | 2   |
+| Ternary Conv2d (STE)     | Validated   | YES (src/)   | 5   |
+| Dual-Expert SCS Block    | Proposed    | YES (src/)   | 4   |
+| INT8 Residual Highway    | Proposed    | YES (src/)   | 4   |
+| Spectral Orthogonality   | Proposed    | YES (src/)   | 4   |
+| Base-5 Quinary Fusion    | Proposed    | YES (src/)   | 4   |
+| Group-Mix Aggregation    | Proposed    | YES (src/)   | 4   |
 | ARM NEON Ternary Kernel  | Designed    | No           | 2   |
 | Latent-Shared Manifold   | Proposed    | No           | 2   |
-| Precision Funnel         | Proposed    | No           | 2   |
-| Full ResiBit-YOLO Model  | Designed    | No           | 2   |
+| Precision Funnel         | Proposed    | YES (src/)   | 4   |
+| Full ResiBit-YOLO Model  | Designed    | YES (src/)   | 4   |
 
 *Ternary Conv2d has partial implementations in binary NN repos but not
  with the specific STE formulation or dual-expert architecture proposed here.

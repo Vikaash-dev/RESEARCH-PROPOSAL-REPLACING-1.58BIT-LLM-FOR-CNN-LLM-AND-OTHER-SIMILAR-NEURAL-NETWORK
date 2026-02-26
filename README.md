@@ -78,6 +78,78 @@ An edge AI application targeting Raspberry Pi that processes dashcam footage in 
 | **Latent-Shared Manifold (LSM)** | Shared feature space enabling knowledge transfer between expert streams |
 | **Quantization-Aware Training (QAT)** | Training with simulated quantization to learn quantization-robust weights |
 
+## Implementation: ResiBit-YOLO Python Package
+
+The `src/` directory contains a working PyTorch implementation of the core components described in the research papers. All components are tested (62 tests, 100% pass rate).
+
+### Quick Start
+
+```bash
+pip install torch>=2.1.0 pytest
+python -m pytest tests/ -v          # Run all tests
+```
+
+### Core Layers (`src/layers/`)
+
+| Module | Class | Description |
+|--------|-------|-------------|
+| `ternary_conv.py` | `TernaryQuantize` | Autograd function: weights → {−1, 0, +1} with STE gradient |
+| `ternary_conv.py` | `TernaryConv2d` | Drop-in `nn.Conv2d` replacement with ternary quantization |
+| `dual_expert.py` | `DualExpertBlock` | Static Channel Splitting into Texture + Shape ternary experts |
+| `resibit_block.py` | `ResiBitBlock` | Dual experts + INT8 Residual Highway + GroupMix aggregation |
+| `group_mix.py` | `GroupMix` | Learned channel-wise fusion of multi-stream features |
+
+### Loss Functions (`src/losses/`)
+
+| Module | Class | Description |
+|--------|-------|-------------|
+| `spectral_ortho.py` | `SpectralOrthogonalityLoss` | FFT-based regularizer enforcing expert frequency specialization |
+
+### Training Utilities (`src/training/`)
+
+| Module | Class | Description |
+|--------|-------|-------------|
+| `precision_funnel.py` | `PrecisionFunnel` | Schedule to progressively reduce INT8 highway (cosine/linear/step) |
+| `monitors.py` | `GradientMonitor` | Detects gradient explosion / Muon Trap failure mode |
+| `monitors.py` | `WeightDistributionMonitor` | Detects dead-zero codebook collapse in ternary weights |
+
+### Deployment (`src/deployment/`)
+
+| Module | Class | Description |
+|--------|-------|-------------|
+| `base5_converter.py` | `Base5Converter` | Fuses dual ternary experts into quinary {−2,−1,0,1,2} weights |
+| `base5_converter.py` | `QuinaryConv2d` | Deployment-time fused convolution layer |
+
+### Model (`src/models/`)
+
+| Module | Class | Description |
+|--------|-------|-------------|
+| `resibit_yolo.py` | `ResiBitBackbone` | Proof-of-concept backbone stacking ResiBit blocks |
+
+### Usage Example
+
+```python
+import torch
+from src.layers.resibit_block import ResiBitBlock
+from src.losses.spectral_ortho import SpectralOrthogonalityLoss
+from src.training.precision_funnel import PrecisionFunnel
+
+# Create a ResiBit block
+block = ResiBitBlock(in_channels=32, out_channels=32, kernel_size=3, padding=1)
+
+# Forward pass returns output + expert features (for spectral loss)
+x = torch.randn(1, 32, 16, 16)
+output, texture_feat, shape_feat = block(x)
+
+# Compute spectral orthogonality loss
+spectral_loss = SpectralOrthogonalityLoss()(texture_feat, shape_feat)
+
+# PrecisionFunnel: progressively disable INT8 highway during training
+funnel = PrecisionFunnel(start_epoch=50, end_epoch=250, schedule="cosine")
+scale = funnel.get_scale(epoch=150)  # Returns ~0.5
+block.set_int8_scale(scale)
+```
+
 ## ADA-7 Development Framework
 
 This project follows the **Advanced Development Assistant (ADA-7)** methodology — a 7-stage, evidence-based development process that blends academic research with industry best practices. All knowledge gathered during research analysis is tracked in text files for transparency and reproducibility.

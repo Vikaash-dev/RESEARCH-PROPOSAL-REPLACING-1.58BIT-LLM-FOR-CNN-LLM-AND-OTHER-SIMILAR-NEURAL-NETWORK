@@ -1,0 +1,40 @@
+# Naive Ternary QAT Configuration
+# Purpose: Reproduce the Muon Trap / gradient collapse failure mode
+# Expected: mAP50 collapses to ~0.0, validating the research problem
+
+model:
+  backbone: resibit_backbone
+  in_channels: 3
+  base_channels: 32
+  num_blocks: 4
+  num_classes: 80
+  scs_ratio: 0.5
+
+training:
+  epochs: 100
+  batch_size: 16
+  optimizer: adamw
+  learning_rate: 0.001
+  weight_decay: 0.01
+  warmup_epochs: 0  # No warmup — exposes instability
+  precision_funnel:
+    start_epoch: 0
+    end_epoch: 0
+    min_scale: 0.0  # No INT8 highway — pure ternary
+    schedule: linear
+
+loss:
+  detection_weight: 1.0
+  spectral_ortho_weight: 0.0  # No spectral loss — baseline failure
+
+monitoring:
+  gradient_threshold: 50.0
+  gradient_divergence_threshold: 100.0
+  weight_collapse_threshold: 0.5
+  log_interval: 50
+
+data:
+  dataset: coco2017
+  train_split: train
+  val_split: val
+  image_size: 640
