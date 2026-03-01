@@ -1,0 +1,191 @@
+================================================================================
+ADA-7 Stage 7: Maintenance & Continuous Evolution
+================================================================================
+Last Updated: 2026-02-26
+Project: 1.58-Bit Ternary Quantization for Edge Object Detection
+================================================================================
+
+------------------------------------------------------------------------
+1. OPERATIONAL EXCELLENCE
+------------------------------------------------------------------------
+
+1a. Performance Monitoring (Baseline Metrics):
+
+  Training Baselines (to detect regressions):
+    | Metric              | Baseline    | Alert Threshold |
+    |---------------------|-------------|-----------------|
+    | FP32 mAP50 (COCO)  | 0.637       | < 0.620         |
+    | ResiBit mAP50       | TBD (≥0.50) | < baseline-0.02 |
+    | Training speed      | TBD iter/s  | < baseline×0.8  |
+    | GPU memory (peak)   | TBD GB      | > baseline×1.2  |
+
+  Inference Baselines (Raspberry Pi 5):
+    | Metric              | Baseline    | Alert Threshold |
+    |---------------------|-------------|-----------------|
+    | FPS (640×640)       | TBD (≥15)   | < 12            |
+    | Latency p99 (ms)    | TBD (≤100)  | > 120           |
+    | Memory usage (MB)   | TBD         | > 512           |
+
+  Anomaly Detection:
+    - Monitor training loss curve slope (detect stagnation)
+    - Track weight distribution entropy (detect collapse patterns)
+    - Flag experiments where mAP improvement < 0.01 over 20 epochs
+
+1b. Capacity Planning:
+
+  Storage Growth:
+    - Each checkpoint: ~10MB (ternary) vs ~50MB (FP32)
+    - Training logs: ~1MB per epoch (wandb)
+    - Projection: 300-epoch run = ~3GB checkpoints + 300MB logs
+    - Retention: Keep best + last 5 checkpoints, archive rest
+
+  Compute Scaling:
+    - Single GPU training: 1-2 days for nano model on COCO
+    - Multi-GPU (future): DataParallel for batch scaling
+    - Scaling trigger: When ablation studies require >10 concurrent runs
+
+1c. Technical Debt Tracking:
+
+  Current Technical Debt:
+    TD-001: Naive STE implementation (no gradient scaling)
+      Severity: MEDIUM
+      Effort: 2 story points
+      Plan: Implement learned step size STE in Phase 2
+
+    TD-002: Hardcoded SCS ratio (50/50 texture/shape)
+      Severity: LOW
+      Effort: 1 story point
+      Plan: Make configurable, run ablation in Phase 3
+
+    TD-003: No ARM NEON kernel (Python-only inference)
+      Severity: HIGH (for deployment)
+      Effort: 13 story points
+      Plan: Defer to Phase 3-4, use TFLite XNNPACK as interim
+
+    TD-004: Single dataset (COCO only)
+      Severity: LOW
+      Effort: 3 story points
+      Plan: Add VOC support for faster iteration in Phase 2
+
+  Refactoring Schedule:
+    - Every 4 sprints: Dedicated refactoring sprint (1 week)
+    - Focus: Reduce cyclomatic complexity, improve test coverage
+    - Rule: No new feature debt added without TD ticket
+
+------------------------------------------------------------------------
+2. EVOLUTION ROADMAP
+------------------------------------------------------------------------
+
+2a. Feature Enhancement Pipeline:
+
+  v1.0 (Current Project):
+    - ResiBit-YOLO with dual-expert ternary + INT8 highway
+    - COCO training and evaluation
+    - TFLite export for Raspberry Pi 5
+
+  v1.1 (Post-Launch, Month 2-3):
+    - Learned STE (adaptive step size)
+    - VOC dataset support
+    - Training speed optimisation (torch.compile)
+    - Comprehensive ablation study automation
+
+  v1.2 (Month 4-6):
+    - ARM NEON ternary inference kernels (C/C++)
+    - ncnn integration for mobile deployment
+    - Multi-scale training support
+    - Model zoo: nano, small, medium variants
+
+  v2.0 (Month 7-12):
+    - Extension to segmentation (ternary YOLO-seg)
+    - Extension to pose estimation (ternary YOLO-pose)
+    - Dynamic MoE routing (replacing SCS)
+    - Multi-GPU distributed QAT
+
+  v3.0 (Year 2):
+    - Ternary vision transformer (ViT) support
+    - Cross-architecture knowledge distillation
+    - Custom ASIC/FPGA deployment targets
+    - AutoML for ternary architecture search
+
+2b. Technology Upgrade Paths:
+
+  PyTorch 2.x → 3.x:
+    Assessment: Monitor PyTorch roadmap
+    Compatibility: torch.compile API may change
+    Migration: Update when 3.x reaches stable release
+    Risk: LOW (PyTorch maintains backward compatibility)
+
+  YOLO Architecture Evolution:
+    Assessment: ultralytics releases new YOLO versions frequently
+    Compatibility: ResiBit blocks are architecture-agnostic
+    Migration: Swap backbone, retrain, validate metrics
+    Risk: LOW (modular block design)
+
+  ARM Architecture (NEON → SVE):
+    Assessment: ARM SVE available on newer cores (ARMv9)
+    Compatibility: SVE provides wider vector operations
+    Migration: Write SVE kernel variants alongside NEON
+    Risk: MEDIUM (hardware not widely available yet)
+
+2c. Architecture Evolution Strategy:
+
+  Short-term (6 months):
+    - Stabilise ResiBit-YOLO architecture
+    - Publish reproducible results
+    - Build community around open-source release
+
+  Medium-term (1 year):
+    - Generalize to non-YOLO architectures
+    - Explore learned quantization (mixed precision per layer)
+    - Investigate knowledge distillation from FP32 teachers
+
+  Long-term (2+ years):
+    - Ternary-native architectures (designed for {-1,0,+1} from scratch)
+    - Integration with neuromorphic computing paradigms
+    - Standardisation of ternary inference formats
+
+------------------------------------------------------------------------
+3. KNOWLEDGE MANAGEMENT
+------------------------------------------------------------------------
+
+3a. Documentation Hierarchy:
+  - README.md: Project overview and quick start
+  - ada7-framework/: Development methodology (this document set)
+  - knowledge/: Research analysis and cross-reference files
+  - docs/api/: Auto-generated API documentation (Sphinx)
+  - docs/guides/: User guides (training, deployment, troubleshooting)
+  - CHANGELOG.md: Version history with breaking changes
+
+3b. Team Onboarding:
+  Day 1: Read README, set up development environment
+  Day 2: Run FP32 baseline training on VOC (fast dataset)
+  Day 3: Study ResiBit block code, run unit tests
+  Day 4: Read Stage 1-3 of ADA-7 framework for context
+  Day 5: Make first contribution (fix a TD ticket or add a test)
+
+3c. Incident Response Playbook:
+
+  Incident: Training diverges (loss → NaN)
+    Severity: P2 (blocks progress, not production)
+    Response:
+      1. Check gradient norms in wandb dashboard
+      2. Identify diverging layer (per-layer gradient analysis)
+      3. Apply fix: gradient clipping, reduce LR, increase warmup
+      4. Post-mortem: Document root cause and update configs
+
+  Incident: Edge inference crash on Pi 5
+    Severity: P1 (production, if deployed)
+    Response:
+      1. Check systemd logs: journalctl -u resibit-yolo
+      2. Check memory: free -m (OOM kill?)
+      3. Check temperature: vcgencmd measure_temp (throttling?)
+      4. Restart service, monitor for recurrence
+      5. Post-mortem: Document and add monitoring for root cause
+
+  Incident: COCO evaluation metrics drop after code change
+    Severity: P2 (regression)
+    Response:
+      1. Identify commit that introduced regression (git bisect)
+      2. Compare wandb runs: before vs after
+      3. Revert commit if fix is not obvious
+      4. Post-mortem: Add regression test to prevent recurrence

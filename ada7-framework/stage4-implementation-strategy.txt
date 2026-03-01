@@ -1,0 +1,265 @@
+================================================================================
+ADA-7 Stage 4: Implementation Strategy & Development Pipeline
+================================================================================
+Last Updated: 2026-02-26
+Project: 1.58-Bit Ternary Quantization for Edge Object Detection
+================================================================================
+
+------------------------------------------------------------------------
+1. PHASED DEVELOPMENT PLAN
+------------------------------------------------------------------------
+
+Phase 1 — MVP: Ternary Baseline (Weeks 1-4)
+  MoSCoW Classification: MUST HAVE
+
+  Sprint 1 (Week 1-2): Foundation
+    - Set up project repository structure
+    - Implement TernaryConv2d with STE
+    - Unit tests for ternary quantization forward/backward
+    - Reproduce YOLO-nano FP32 baseline (mAP50 ≥ 0.63 on COCO val)
+
+  Sprint 2 (Week 3-4): Failure Reproduction
+    - Replace YOLO Conv2d layers with TernaryConv2d
+    - Train with standard QAT (reproduce Muon Trap / mAP collapse)
+    - Document failure analysis (weight distributions, gradient norms)
+    - This validates the research problem statement
+
+  MVP Success Criteria:
+    ✓ FP32 baseline mAP50 ≥ 0.63
+    ✓ Ternary QAT mAP50 collapses (confirms the problem)
+    ✓ Training logs show gradient manifold shattering
+
+Phase 2 — Core: ResiBit Architecture (Weeks 5-8)
+  MoSCoW Classification: MUST HAVE
+
+  Sprint 3 (Week 5-6): Dual Expert + SCS
+    - Implement DualExpertBlock with Static Channel Splitting
+    - Implement SpectralOrthogonalityLoss
+    - Integration tests: dual-expert block within YOLO backbone
+    - Training with dual-expert (expected: improvement over Phase 1)
+
+  Sprint 4 (Week 7-8): INT8 Residual Highway
+    - Implement ResiBitBlock (dual expert + INT8 highway)
+    - Implement PrecisionFunnel training schedule
+    - Implement QATTrainer with gradient monitoring
+    - Full training run on COCO (target: mAP50 ≥ 0.50)
+
+Phase 3 — Enhancement: Deployment (Weeks 9-12)
+  MoSCoW Classification: SHOULD HAVE
+
+  Sprint 5 (Week 9-10): Model Optimisation
+    - Implement Base5Converter (fusion for deployment)
+    - Optimise training: mixed precision, gradient checkpointing
+    - Ablation studies: INT8 highway width, SCS ratio, loss weights
+    - Target: mAP50 ≥ 0.55
+
+  Sprint 6 (Week 11-12): Edge Deployment
+    - ONNX export with custom ternary/quinary ops
+    - TFLite conversion pipeline
+    - Raspberry Pi 5 inference benchmark
+    - Target: ≥15 FPS on Pi 5
+
+Phase 4 — Polish: Validation (Weeks 13-16)
+  MoSCoW Classification: COULD HAVE
+
+  Sprint 7 (Week 13-14): Comprehensive Evaluation
+    - Full COCO evaluation with all metrics
+    - Comparison table vs FP32, INT8, binary baselines
+    - Latency/throughput/accuracy Pareto analysis
+    - ARM NEON kernel prototyping (if time permits)
+
+  Sprint 8 (Week 15-16): Documentation & Release
+    - Reproducibility package (scripts, configs, checkpoints)
+    - Training guide and API documentation
+    - Update research papers with experimental results
+    - Open-source release preparation
+
+  WON'T HAVE (v1):
+    - Multi-GPU distributed training
+    - Non-YOLO model support
+    - Dynamic MoE routing
+    - Cloud deployment pipeline
+
+------------------------------------------------------------------------
+2. DEVELOPMENT ENVIRONMENT
+------------------------------------------------------------------------
+
+2a. Docker Configuration (Multi-Stage Build):
+
+  # Stage 1: Training Environment
+  FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-devel AS train
+  RUN pip install ultralytics wandb scipy
+  COPY src/ /workspace/src/
+  COPY configs/ /workspace/configs/
+  WORKDIR /workspace
+
+  # Stage 2: Edge Deployment Environment
+  FROM python:3.11-slim AS deploy
+  RUN pip install onnxruntime tflite-runtime
+  COPY deploy/ /app/
+  WORKDIR /app
+
+2b. CI/CD Pipeline:
+
+  Trigger: push to main, pull_request
+  Steps:
+    1. Lint: ruff check src/ --select E,W,F
+    2. Type Check: mypy src/ --ignore-missing-imports
+    3. Unit Tests: pytest tests/unit/ -v --tb=short
+    4. Integration Tests: pytest tests/integration/ -v (GPU required)
+    5. Build Check: python -c "from resibit_yolo import ResiBitYOLO"
+
+2c. Code Quality Gates:
+  - ruff (linting, formatting)
+  - mypy (type checking)
+  - pytest with coverage ≥ 80% for core modules
+  - Pre-commit hooks for automated formatting
+
+------------------------------------------------------------------------
+3. PROJECT DIRECTORY STRUCTURE
+------------------------------------------------------------------------
+
+  resibit-yolo/
+  ├── src/
+  │   ├── __init__.py
+  │   ├── layers/
+  │   │   ├── __init__.py
+  │   │   ├── ternary_conv.py      # TernaryConv2d + STE
+  │   │   ├── dual_expert.py       # DualExpertBlock + SCS
+  │   │   ├── resibit_block.py     # ResiBitBlock (INT8 highway)
+  │   │   └── group_mix.py         # Group-Mix aggregation
+  │   ├── losses/
+  │   │   ├── __init__.py
+  │   │   └── spectral_ortho.py    # SpectralOrthogonalityLoss
+  │   ├── training/
+  │   │   ├── __init__.py
+  │   │   ├── qat_trainer.py       # QATTrainer
+  │   │   ├── precision_funnel.py  # PrecisionFunnel schedule
+  │   │   └── monitors.py          # Gradient/weight monitors
+  │   ├── deployment/
+  │   │   ├── __init__.py
+  │   │   ├── base5_converter.py   # Base5 fusion
+  │   │   └── export.py            # ONNX/TFLite export
+  │   └── models/
+  │       ├── __init__.py
+  │       └── resibit_yolo.py      # Full model definition
+  ├── configs/
+  │   ├── train_fp32_baseline.yaml
+  │   ├── train_ternary_naive.yaml
+  │   ├── train_resibit.yaml
+  │   └── deploy_pi5.yaml
+  ├── tests/
+  │   ├── unit/
+  │   │   ├── test_ternary_conv.py
+  │   │   ├── test_dual_expert.py
+  │   │   ├── test_resibit_block.py
+  │   │   └── test_spectral_loss.py
+  │   └── integration/
+  │       ├── test_training_loop.py
+  │       └── test_export_pipeline.py
+  ├── scripts/
+  │   ├── train.py
+  │   ├── evaluate.py
+  │   ├── export.py
+  │   └── benchmark_pi5.py
+  ├── notebooks/
+  │   ├── 01_baseline_analysis.ipynb
+  │   ├── 02_failure_reproduction.ipynb
+  │   └── 03_resibit_results.ipynb
+  ├── Dockerfile
+  ├── pyproject.toml
+  ├── requirements.txt
+  └── README.md
+
+------------------------------------------------------------------------
+4. CODE TEMPLATES — CRITICAL COMPONENTS
+------------------------------------------------------------------------
+
+4a. TernaryConv2d (starter implementation):
+
+  import torch
+  import torch.nn as nn
+  import torch.nn.functional as F
+
+  class TernaryQuantize(torch.autograd.Function):
+      @staticmethod
+      def forward(ctx, input):
+          ctx.save_for_backward(input)
+          # Ternary quantization: {-1, 0, +1}
+          threshold = 0.05 * input.abs().mean()
+          output = torch.zeros_like(input)
+          output[input > threshold] = 1.0
+          output[input < -threshold] = -1.0
+          return output
+
+      @staticmethod
+      def backward(ctx, grad_output):
+          input, = ctx.saved_tensors
+          # Straight-Through Estimator: pass gradient unchanged
+          # Clip to prevent gradient explosion
+          grad_input = grad_output.clone()
+          grad_input[input.abs() > 1.0] = 0
+          return grad_input
+
+  class TernaryConv2d(nn.Module):
+      def __init__(self, in_channels, out_channels, kernel_size,
+                   stride=1, padding=0, bias=False):
+          super().__init__()
+          self.conv = nn.Conv2d(in_channels, out_channels, kernel_size,
+                                stride=stride, padding=padding, bias=bias)
+
+      def forward(self, x):
+          w_ternary = TernaryQuantize.apply(self.conv.weight)
+          return F.conv2d(x, w_ternary, self.conv.bias,
+                         self.conv.stride, self.conv.padding)
+
+4b. Error Handling Pattern:
+
+  import logging
+  logger = logging.getLogger(__name__)
+
+  class TrainingDivergenceError(Exception):
+      """Raised when gradient norms exceed safety threshold."""
+      pass
+
+  def check_gradient_health(model, threshold=100.0):
+      total_norm = 0.0
+      for p in model.parameters():
+          if p.grad is not None:
+              total_norm += p.grad.data.norm(2).item() ** 2
+      total_norm = total_norm ** 0.5
+      if total_norm > threshold:
+          logger.error(f"Gradient norm {total_norm:.2f} > {threshold}")
+          raise TrainingDivergenceError(
+              f"Gradient explosion detected: norm={total_norm:.2f}"
+          )
+      return total_norm
+
+4c. Configuration Management:
+
+  # configs/train_resibit.yaml
+  model:
+    backbone: yolo-nano
+    block_type: resibit
+    scs_ratio: 0.5          # 50% texture, 50% shape channels
+    int8_highway_width: 0.25 # 25% of channel width for INT8 path
+
+  training:
+    epochs: 300
+    batch_size: 16
+    optimizer: adamw
+    learning_rate: 0.001
+    warmup_epochs: 10
+    precision_funnel:
+      start_epoch: 50
+      end_epoch: 250
+
+  loss:
+    detection_weight: 1.0
+    spectral_ortho_weight: 0.1
+
+  data:
+    dataset: coco2017
+    train_split: train
+    val_split: val
+    image_size: 640

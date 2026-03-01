@@ -1,0 +1,179 @@
+================================================================================
+Cross-Analysis: arXiv Papers ↔ GitHub Repositories
+================================================================================
+Last Updated: 2026-02-26
+Project: Research Proposal — Replacing 1.58-Bit LLM for CNN, LLM & Similar NNs
+================================================================================
+
+This file synthesises knowledge from arXiv paper analysis and GitHub repository
+analysis to identify gaps, opportunities, and implementation strategies.
+
+------------------------------------------------------------------------
+1. MAPPING: PAPER CONCEPTS → EXISTING IMPLEMENTATIONS
+------------------------------------------------------------------------
+
+Concept: Ternary Weight Quantization {-1, 0, +1}
+  Papers:  All five proposals in this repository
+  Repos:   microsoft/BitNet (LLM-only), htqin/awesome-binary-neural-network
+  Gap:     No CNN-specific ternary weight implementation exists.
+           BitNet implements ternary for transformers but not convolutions.
+  Action:  Implement ternary Conv2d layer in PyTorch with STE gradient.
+
+Concept: Dual-Expert Architecture (Texture + Shape)
+  Papers:  NeuroBit-SCS, DualExpert-BitYOLO26, ResiBit-YOLO
+  Repos:   No direct equivalent found.
+           Closest: Mixture-of-Experts implementations in LLM space
+           (e.g., huggingface/transformers MoE support).
+  Gap:     No dual-expert ternary convolution block implementation.
+  Action:  Implement DualExpert block with Static Channel Splitting.
+
+Concept: INT8 Residual Highway
+  Papers:  ResiBit-YOLO, Spectral-ResiBit YOLO, Unified Bit-Intelligence
+  Repos:   Partial: ultralytics INT8 quantization, ncnn INT8 inference
+  Gap:     Existing INT8 paths are full-model quantization, not
+           per-block residual highways alongside ternary main paths.
+  Action:  Implement ResiBit block combining ternary + INT8 streams.
+
+Concept: Spectral Orthogonality Loss (FFT-based)
+  Papers:  NeuroBit-SCS, Spectral-ResiBit YOLO
+  Repos:   No existing implementation.
+           Related: torch.fft module provides FFT primitives.
+  Gap:     Novel loss function; no reference implementation.
+  Action:  Implement spectral orthogonality regulariser using torch.fft.
+
+Concept: Base-5 / Quinary Fusion
+  Papers:  DualExpert-BitYOLO26, Unified Bit-Intelligence
+  Repos:   No existing implementation.
+  Gap:     Additive fusion of two ternary weight sets into {-2,-1,0,1,2}
+           is a novel operation with no open-source precedent.
+  Action:  Implement additive reparameterisation and quinary inference kernel.
+
+Concept: ARM NEON Ternary Deployment
+  Papers:  Spectral-ResiBit YOLO (PSLUC paradigm), NeuroBit-SCS
+  Repos:   ARM-software/ComputeLibrary, Tencent/ncnn
+  Gap:     Existing NEON kernels support INT8/FP16, not ternary.
+           The "Packing Fallacy" (NeuroBit-SCS) shows that naive ternary
+           bit-packing degrades throughput on NEON.
+  Action:  Design custom NEON ternary GEMM using PSLUC paradigm.
+
+Concept: Quantization-Aware Training (QAT) for YOLO
+  Papers:  All five proposals
+  Repos:   ultralytics/ultralytics (basic QAT), NVIDIA/TensorRT (PTQ)
+  Gap:     Existing YOLO QAT supports INT8, not ternary.
+           The Muon Trap failure mode is unique to ternary QAT.
+  Action:  Implement ternary QAT pipeline with warmup-based mitigation.
+
+------------------------------------------------------------------------
+2. TECHNOLOGY READINESS ASSESSMENT (updated 2026-02-26 — post-implementation)
+------------------------------------------------------------------------
+
+| Component                | Paper Status | Code Exists? | TRL |
+|--------------------------|-------------|--------------|-----|
+| Ternary Conv2d (STE)     | Validated   | YES (src/)   | 5   |
+| Dual-Expert SCS Block    | Proposed    | YES (src/)   | 4   |
+| INT8 Residual Highway    | Proposed    | YES (src/)   | 4   |
+| Spectral Orthogonality   | Proposed    | YES (src/)   | 4   |
+| Base-5 Quinary Fusion    | Proposed    | YES (src/)   | 4   |
+| Group-Mix Aggregation    | Proposed    | YES (src/)   | 4   |
+| ARM NEON Ternary Kernel  | Designed    | No           | 2   |
+| Latent-Shared Manifold   | Proposed    | No           | 2   |
+| Precision Funnel         | Proposed    | YES (src/)   | 4   |
+| Full ResiBit-YOLO Model  | Designed    | YES (src/)   | 4   |
+
+*Ternary Conv2d has partial implementations in binary NN repos but not
+ with the specific STE formulation or dual-expert architecture proposed here.
+
+TRL (Technology Readiness Level):
+  1 = Basic principles observed
+  2 = Technology concept formulated
+  3 = Experimental proof of concept
+  4 = Technology validated in lab
+  5 = Technology validated in relevant environment
+
+------------------------------------------------------------------------
+3. IMPLEMENTATION PRIORITY MATRIX
+------------------------------------------------------------------------
+
+Priority 1 (Must Have for MVP):
+  - Ternary Conv2d layer with STE
+  - Basic QAT training loop
+  - YOLO backbone integration (from ultralytics)
+  - COCO dataset evaluation pipeline
+
+Priority 2 (Should Have):
+  - Dual-Expert block with Static Channel Splitting
+  - INT8 Residual Highway (ResiBit block)
+  - Spectral Orthogonality loss
+  - Base-5 quinary fusion for deployment
+
+Priority 3 (Could Have):
+  - ARM NEON ternary inference kernels
+  - Latent-Shared Manifold (LSM)
+  - Precision Funnel training schedule
+  - Group-Mix aggregation variants
+
+Priority 4 (Won't Have in v1):
+  - Multi-architecture support (non-YOLO models)
+  - Dynamic MoE routing (superseded by SCS)
+  - Cloud deployment pipeline
+  - Multi-GPU distributed training
+
+------------------------------------------------------------------------
+4. RISK ANALYSIS: PAPER CLAIMS vs PRACTICAL IMPLEMENTATION
+------------------------------------------------------------------------
+
+Risk 1: Muon Trap Reproducibility
+  Severity: HIGH
+  Description: The Muon Trap failure mode is central to the research narrative.
+               If it cannot be reproduced, the motivation for ResiBit weakens.
+  Mitigation: Use exact Muon optimizer configuration from ResiBit-YOLO paper.
+              Test with both Muon and AdamW to isolate the optimizer effect.
+
+Risk 2: mAP Recovery Claims
+  Severity: MEDIUM
+  Description: 94% FP32 mAP recovery is claimed but papers are "untested
+               brainstormed approaches" per the repository status.
+  Mitigation: Set realistic initial target of >80% FP32 mAP recovery.
+              Implement comprehensive ablation study framework.
+
+Risk 3: ARM NEON Throughput
+  Severity: MEDIUM
+  Description: 2.4× INT8 throughput claimed, but NEON ternary kernels are
+               at TRL 2 (concept only).
+  Mitigation: Begin with Python/PyTorch validation, defer NEON kernel
+              development to later phase. Use ncnn INT8 as baseline.
+
+Risk 4: Training Instability
+  Severity: HIGH
+  Description: ResiBit-YOLO documents complete gradient collapse with naïve
+               ternary QAT. INT8 highway is proposed fix but untested.
+  Mitigation: Implement progressive quantization (FP32 → INT8 → ternary)
+              rather than abrupt switch. Add gradient norm monitoring.
+
+------------------------------------------------------------------------
+5. RECOMMENDED IMPLEMENTATION SEQUENCE
+------------------------------------------------------------------------
+
+Phase 1 (Weeks 1-4): Foundation
+  - Set up YOLO training pipeline using ultralytics
+  - Implement ternary Conv2d with STE
+  - Reproduce baseline FP32 performance on COCO
+  - Reproduce Muon Trap failure (validate problem statement)
+
+Phase 2 (Weeks 5-8): Core Architecture
+  - Implement ResiBit block (ternary + INT8 highway)
+  - Implement Static Channel Splitting
+  - Implement spectral orthogonality loss
+  - Train and evaluate ResiBit-YOLO on COCO
+
+Phase 3 (Weeks 9-12): Optimisation & Deployment
+  - Implement Base-5 quinary fusion
+  - Optimise training pipeline (mixed precision, gradient scaling)
+  - Begin ARM NEON kernel prototyping
+  - Benchmark against ultralytics INT8 baseline
+
+Phase 4 (Weeks 13-16): Validation & Publication
+  - Complete ablation studies
+  - Reproduce key metrics from papers
+  - Document results and update papers
+  - Open-source implementation with reproducibility scripts

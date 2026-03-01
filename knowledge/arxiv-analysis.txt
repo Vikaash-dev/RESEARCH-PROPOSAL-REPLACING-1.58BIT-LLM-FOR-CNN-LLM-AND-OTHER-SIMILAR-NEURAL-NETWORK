@@ -1,0 +1,157 @@
+================================================================================
+arXiv Research Paper Analysis — 1.58-Bit Quantization for Edge Neural Networks
+================================================================================
+Last Updated: 2026-02-26
+Project: Research Proposal — Replacing 1.58-Bit LLM for CNN, LLM & Similar NNs
+================================================================================
+
+This file tracks knowledge gained from analysing arXiv research papers relevant
+to the extreme low-bit quantization research direction pursued in this project.
+
+------------------------------------------------------------------------
+1. FOUNDATIONAL PAPERS
+------------------------------------------------------------------------
+
+[Ma et al., 2024, "The Era of 1-bit LLMs: All Large Language Models are in
+ 1.58 Bits", arXiv:2402.17764]
+  - Demonstrated that ternary weights {-1, 0, +1} are sufficient for LLM
+    reasoning at scale.
+  - Coined the "1.58-bit" terminology (log2(3) ≈ 1.58 bits per weight).
+  - Showed massive throughput gains by replacing multiplications with bitwise
+    addition and subtraction.
+  - Key limitation: validated only on wide/deep LLMs (billions of parameters),
+    not on thin CNN architectures.
+
+[Rastegari et al., 2016, "XNOR-Net: ImageNet Classification Using Binary
+ Convolutional Neural Networks", arXiv:1603.05279]
+  - Early binary weight network for image classification.
+  - Demonstrated 58× compression but with significant accuracy degradation.
+  - Established the trade-off between compression and representational capacity
+    that motivates the current line of research.
+
+[Courbariaux et al., 2016, "Binarized Neural Networks", arXiv:1602.02830]
+  - Introduced the Straight-Through Estimator (STE) for binary/ternary weight
+    training.
+  - STE remains the dominant gradient approximation method in all papers in this
+    repository.
+  - Known issue: STE introduces discontinuous gradient noise that accumulates
+    during training.
+
+[Li et al., 2016, "Ternary Weight Networks", arXiv:1605.04711]
+  - Formalised ternary weight quantization with threshold-based weight
+    assignment.
+  - Achieved 16× model size reduction with minimal accuracy loss on large
+    models.
+  - Did not address the "thin model" problem central to YOLO-scale
+    architectures.
+
+------------------------------------------------------------------------
+2. DIRECTLY RELEVANT PAPERS (analysed from repository PDFs)
+------------------------------------------------------------------------
+
+2a. Spectral-ResiBit YOLO [K-Dense Web, 2026]
+    Source: manuscript.pdf
+    Key Contributions:
+      - Universal Spectral-ResiBit (USR) Cell architecture
+      - FFT-based Spectral Orthogonality loss for expert specialization
+      - INT8 Residual Highways (RPA) to anchor gradient manifold
+      - Identification of "Muon Trap": toxic interaction between Muon
+        optimizer's Newton-Schulz orthogonalization and STE gradients
+      - 94.0% FP32 accuracy recovery with 13.78× compression
+      - Hardware Manifesto for ARM NEON: Pack-Store-Load-Unpack-Compute
+        (PSLUC) paradigm
+    Target Hardware: Raspberry Pi 5 (ARM NEON)
+    Dataset: COCO
+
+2b. NeuroBit-SCS [K-Dense Web, 2026]
+    Source: 75164103-a63b-451f-9e00-625d47c02dea.pdf
+    Key Contributions:
+      - Static Channel Splitting (SCS) to decouple texture/shape features
+      - INT8 Residual Precision Anchoring (RPA)
+      - Spectral Orthogonality loss via 2D FFT
+      - Identification and resolution of "Packing Fallacy" on ARM NEON
+      - 98% of FP16 accuracy at 2.4× INT8 inference speed
+    Architecture: Dual-expert ternary block (Texture Expert + Shape Expert)
+    Target Hardware: Raspberry Pi 5
+
+2c. Unified Bit-Intelligence [K-Dense Web, 2026]
+    Source: 8a1d8042-3b95-497f-9dda-fd0c9b9feb5b.pdf
+    Key Contributions:
+      - Synthesis of SCS + Base-5 Fusion via Latent-Shared Manifold (LSM)
+      - Precision Funnel for gradient manifold anchoring
+      - Forensic analysis of Muon Trap (Newton-Schulz divergence)
+      - 13.78× compression, 94% FP32 mAP50 recovery
+      - 2.4× throughput on ARM NEON targets
+    Significance: Final unified architecture combining all prior building blocks
+
+2d. ResiBit-YOLO [K-Dense Web, 2026]
+    Source: 8b2d7b18-be2a-42ab-908d-62720fd29691.pdf (28 pages)
+    Key Contributions:
+      - Most detailed investigation: problem-solution format
+      - Confirmed Efficiency Hypothesis (13.78× compression achievable)
+      - Falsified Stability Hypothesis (naïve QAT → mAP50 = 0.0)
+      - Root cause: 59.3% (Expert A) and 60.5% (Expert B) weights collapse to
+        dead-zero state
+      - ResiBit block: Dual-Stream Ternary Experts + INT8 Residual Highway +
+        Group-Mix aggregation
+      - Full PyTorch implementation provided
+      - Hardware deployment pathway documented
+    Significance: Contains complete experimental methodology and failure analysis
+
+2e. DualExpert-BitYOLO26 [K-Dense Web, 2026]
+    Source: c0f315e2-829b-40dc-b069-0b21bedc015c.pdf (24 pages)
+    Key Contributions:
+      - Ternary reparameterisation: two {-1,0,+1} experts fused into one
+        quinary {-2,-1,0,1,2} layer at deployment
+      - 2.32 effective bits from two 1.58-bit streams
+      - No dual-memory penalty at inference (single fused convolution)
+      - MuSGD optimizer analysis and warmup-based mitigation
+      - First principled synthesis of ternary LLM quantization +
+        reparameterised dual-expert CNNs
+      - Situated within Mixture of Quantisation Experts (MoQE) framework
+    Architecture: YOLO26n base
+
+------------------------------------------------------------------------
+3. KEY FINDINGS ACROSS PAPERS
+------------------------------------------------------------------------
+
+Common Themes:
+  a) The "Capacity-Stability Dilemma" is the central challenge
+  b) Thin CNN models (YOLO) cannot absorb quantization noise like wide LLMs
+  c) The Muon optimizer + STE interaction ("Muon Trap") is a primary failure mode
+  d) INT8 residual paths are essential for gradient stability during QAT
+  e) Spectral (frequency-domain) separation of texture vs shape features improves
+     representation under extreme quantization
+  f) 13.78× compression is consistently achievable
+  g) ARM NEON deployment requires custom bit-packing strategies (not naive)
+
+Unresolved Questions:
+  - How do these approaches scale to larger YOLO variants (m, l, x)?
+  - What is the accuracy-latency Pareto frontier across different bit-widths?
+  - Can the dual-expert approach generalize to other dense prediction tasks
+    (segmentation, depth estimation)?
+  - What is the training cost overhead of the proposed approaches?
+
+------------------------------------------------------------------------
+4. RELATED arXiv PAPERS FOR FURTHER INVESTIGATION
+------------------------------------------------------------------------
+
+[Liu et al., 2023, "LLM-QAT: Data-Free Quantization Aware Training for LLMs",
+ arXiv:2305.17888]
+  - Quantization-aware training without calibration data.
+  - Relevant for understanding QAT dynamics in low-bit settings.
+
+[Frantar et al., 2023, "GPTQ: Accurate Post-Training Quantization for GPTs",
+ arXiv:2210.17323]
+  - Post-training quantization approach.
+  - Contrasts with the QAT-based approaches in this repository.
+
+[Wang et al., 2023, "BitNet: Scaling 1-bit Transformers for LLMs",
+ arXiv:2310.11453]
+  - Direct predecessor to the 1.58-bit work.
+  - Established feasibility of 1-bit training for transformers.
+
+[Shang et al., 2023, "PB-LLM: Partially-Binarized LLMs",
+ arXiv:2310.00034]
+  - Partial binarization strategy that preserves salient weights.
+  - Conceptually related to the INT8 residual highway approach.

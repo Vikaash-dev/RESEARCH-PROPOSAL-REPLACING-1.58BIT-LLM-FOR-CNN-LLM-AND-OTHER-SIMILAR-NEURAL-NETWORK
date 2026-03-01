@@ -1,0 +1,176 @@
+================================================================================
+GitHub Repository Analysis — 1.58-Bit Quantization & Edge Detection Ecosystem
+================================================================================
+Last Updated: 2026-02-26
+Project: Research Proposal — Replacing 1.58-Bit LLM for CNN, LLM & Similar NNs
+================================================================================
+
+This file tracks knowledge gained from analysing GitHub repositories relevant
+to the extreme low-bit quantization and edge deployment research direction.
+
+------------------------------------------------------------------------
+1. CORE QUANTIZATION REPOSITORIES
+------------------------------------------------------------------------
+
+1a. microsoft/BitNet
+    Stars: ~12,000+  |  Language: Python/C++
+    Description: Official implementation of BitNet b1.58 (1-bit LLM inference)
+    Key Features:
+      - Ternary weight kernels for transformer inference
+      - Custom CUDA kernels for {-1, 0, +1} weight multiplication
+      - Supports Llama-style architectures
+    Relevance to Project:
+      - Provides the foundational ternary inference paradigm
+      - LLM-focused; does NOT address CNN/YOLO architectures
+      - Gap: no convolutional ternary kernels, no edge deployment path
+    Active Maintenance: Yes (frequent commits)
+
+1b. ultralytics/ultralytics
+    Stars: ~35,000+  |  Language: Python
+    Description: YOLOv8/YOLO11 framework (latest YOLO family)
+    Key Features:
+      - State-of-the-art real-time object detection
+      - Built-in export to TFLite, ONNX, CoreML, TensorRT
+      - INT8 quantization support via post-training quantization
+    Relevance to Project:
+      - Target architecture family for all proposals
+      - Provides baseline FP32 and INT8 performance benchmarks
+      - Gap: no native 1.58-bit / ternary quantization support
+    Active Maintenance: Yes (very active, daily commits)
+
+1c. huggingface/optimum
+    Stars: ~2,500+  |  Language: Python
+    Description: Hardware acceleration and quantization for HuggingFace models
+    Key Features:
+      - GPTQ, AWQ, bitsandbytes integration
+      - ONNX Runtime optimization
+      - Quantization pipelines for transformers
+    Relevance to Project:
+      - Provides quantization infrastructure patterns
+      - Gap: focused on LLMs/transformers, not CNNs
+    Active Maintenance: Yes
+
+------------------------------------------------------------------------
+2. EDGE DEPLOYMENT REPOSITORIES
+------------------------------------------------------------------------
+
+2a. google-ai-edge/LiteRT (formerly TensorFlow Lite)
+    Stars: ~180,000+ (TensorFlow mono-repo)  |  Language: C++/Python
+    Description: On-device ML inference framework
+    Key Features:
+      - INT8/INT4 quantization-aware training support
+      - Delegate system for hardware acceleration
+      - ARM NEON optimized kernels
+    Relevance to Project:
+      - Primary deployment target framework for Raspberry Pi
+      - INT8 path well-optimized; sub-INT8 requires custom delegates
+      - Gap: no native ternary weight support
+    Active Maintenance: Yes
+
+2b. ARM-software/ComputeLibrary
+    Stars: ~2,800+  |  Language: C++
+    Description: ARM's optimized compute library for NEON/SVE/GPU
+    Key Features:
+      - GEMM kernels optimized for ARM architectures
+      - INT8 and FP16 matrix multiplication
+      - Direct NEON intrinsics for convolution operations
+    Relevance to Project:
+      - Directly relevant for ARM NEON deployment pathway
+      - The "Packing Fallacy" identified in NeuroBit-SCS relates to
+        misalignment between ternary bit-packing and NEON SIMD lanes
+      - Gap: no ternary-specific GEMM kernels
+    Active Maintenance: Yes
+
+2c. NVIDIA/TensorRT
+    Stars: ~11,000+  |  Language: C++/Python
+    Description: High-performance deep learning inference optimizer
+    Key Features:
+      - INT8 and FP16 inference optimization
+      - Layer fusion and kernel auto-tuning
+      - Supports ONNX model import
+    Relevance to Project:
+      - Reference for GPU-side quantized inference
+      - Not directly applicable to ARM edge targets
+      - Useful for benchmark comparison (GPU vs ARM edge)
+    Active Maintenance: Yes
+
+------------------------------------------------------------------------
+3. BINARY/TERNARY NEURAL NETWORK REPOSITORIES
+------------------------------------------------------------------------
+
+3a. htqin/awesome-binary-neural-network
+    Stars: ~1,200+  |  Language: Markdown/Python
+    Description: Curated list of binary/ternary NN research and code
+    Key Features:
+      - Comprehensive survey of BNN/TNN literature
+      - Links to implementations of key papers
+      - Benchmark results across architectures
+    Relevance to Project:
+      - Literature survey resource
+      - Provides context for positioning the repository's contributions
+    Active Maintenance: Moderately active
+
+3b. DerrickXuNu/XNOR-Net-PyTorch
+    Stars: ~800+  |  Language: Python
+    Description: PyTorch implementation of XNOR-Net
+    Key Features:
+      - Binary weight convolution layers
+      - Binary activation functions
+      - ImageNet training scripts
+    Relevance to Project:
+      - Historical reference for binary convolution implementation
+      - The dual-expert ternary approach in this project extends beyond
+        simple binary networks
+    Active Maintenance: Low (research code)
+
+------------------------------------------------------------------------
+4. YOLO QUANTIZATION REPOSITORIES
+------------------------------------------------------------------------
+
+4a. Megvii-BaseDetection/YOLOX
+    Stars: ~9,000+  |  Language: Python
+    Description: High-performance anchor-free YOLO detector
+    Key Features:
+      - Anchor-free detection head
+      - Built-in INT8 quantization via TensorRT
+      - Deployment-focused design
+    Relevance to Project:
+      - Provides anchor-free YOLO baseline
+      - INT8 quantization results useful for comparison
+      - Gap: no sub-INT8 quantization exploration
+    Active Maintenance: Moderate
+
+4b. Tencent/ncnn
+    Stars: ~21,000+  |  Language: C++
+    Description: High-performance NN inference framework for mobile
+    Key Features:
+      - ARM NEON optimized inference
+      - INT8 quantization with per-channel calibration
+      - Vulkan GPU compute backend
+      - Supports YOLO model inference
+    Relevance to Project:
+      - Mobile/edge inference reference implementation
+      - INT8 NEON kernel patterns relevant to ternary kernel design
+      - Gap: no ternary weight support
+    Active Maintenance: Yes (very active)
+
+------------------------------------------------------------------------
+5. KEY OBSERVATIONS
+------------------------------------------------------------------------
+
+Gap Analysis Summary:
+  a) No existing repository implements ternary (1.58-bit) quantization
+     specifically for YOLO/CNN architectures.
+  b) LLM ternary frameworks (BitNet) do not transfer to CNNs without
+     significant architectural modifications.
+  c) Edge deployment frameworks (TFLite, ncnn) support INT8 but not
+     sub-INT8 quantization natively.
+  d) The dual-expert ternary reparameterisation approach proposed in this
+     repository's papers has no existing open-source implementation.
+  e) ARM NEON ternary GEMM kernels are a novel contribution not found in
+     any existing repository.
+
+Opportunity:
+  - First-mover advantage for open-source ternary YOLO implementation
+  - Potential to contribute ternary kernels to TFLite or ncnn ecosystems
+  - Bridge between LLM quantization research and edge CV deployment
