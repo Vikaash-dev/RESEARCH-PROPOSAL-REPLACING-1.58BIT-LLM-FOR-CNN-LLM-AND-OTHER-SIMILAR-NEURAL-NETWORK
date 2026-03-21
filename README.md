@@ -22,6 +22,7 @@
 8. [Cross-Reference with Related and Foundational Works](#8-cross-reference-with-related-and-foundational-works)
 9. [Critical Analysis and Open Questions](#9-critical-analysis-and-open-questions)
 10. [Unvalidated Research Disclaimer](#10-unvalidated-research-disclaimer)
+11. [Empirical Validation Plan](#11-empirical-validation-plan)
 
 ---
 
@@ -738,3 +739,64 @@ The research proposals, manuscripts, preprints, and application documents in thi
 - Treat all architectural proposals as **preliminary hypotheses** requiring rigorous experimental confirmation
 - The mathematical analyses (Base-5 compression derivation, spectral orthogonality formulation, PSLUC instruction mapping) can be independently verified and are the most reliably informative parts of these documents
 
+---
+
+## 11. Empirical Validation Plan
+
+The manuscripts here remain speculative until they are backed by reproducible experiments. The following protocol defines a minimal, evidence-focused pathway to validate (or falsify) the Spectral-ResiBit YOLO claims through empirical testing.
+
+### 11.1 Experimental Goals
+- **Accuracy**: Demonstrate that Base-5 dual experts + INT8 residual highways + spectral orthogonality recover mAP within 1% absolute of the FP32 baseline on COCO val2017.
+- **Efficiency**: Show ≥3× end-to-end latency speedup (or proportional energy-per-frame reduction) on Raspberry Pi 5/4 versus FP32, with multiplication-free execution verified in operator profiling.
+- **Stability**: Confirm that spectral separation and sparsity metrics converge consistently across seeds.
+
+### 11.2 Reproducible Setup
+- **Codebase**: Implement Spectral-ResiBit YOLO atop a public YOLO variant (e.g., YOLOv8n or YOLOv5n) in PyTorch 2.x with quantization-aware training; publish all training/inference scripts and configs.
+- **Datasets**: COCO 2017 train/val with exact split hashes; document any synthetic augmentations used.
+- **Hardware**:
+  - Training: 1× NVIDIA 3090/A100-class GPU (record driver/CUDA/cuDNN versions).
+  - Edge: Raspberry Pi 5 (preferred) or Pi 4 with NEON; optional Jetson Orin Nano for comparison.
+- **Environment**: Pin Python, PyTorch, ONNX Runtime, and quantization toolkit versions; release `requirements.txt` or container/Dockerfile.
+- **Seeds**: Run ≥3 seeds; report mean ± std for all metrics.
+
+### 11.3 Training and Ablation Matrix
+Train with the same data and schedule (warmup → QAT → freeze) and publish checkpoints for:
+1. FP32 baseline.
+2. INT8 baseline (standard PTQ/QAT) without dual experts.
+3. Ternary-only Base-3 (no INT8 residuals, no spectral loss).
+4. Base-5 dual experts (ternary fusion) without residual highways.
+5. Base-5 + INT8 residual highways (ResiBit) without spectral loss.
+6. Full Spectral-ResiBit (Base-5 + INT8 residuals + spectral orthogonality loss).
+
+Log for every run:
+- mAP50 and mAP50-95 on COCO val2017 and per-class AP for S/M/L objects
+- Weight sparsity, spectral separation coefficient, and loss curves over epochs
+- Training throughput and GPU memory usage
+
+### 11.4 Inference Benchmarks (Edge)
+- Export ONNX and TFLite int8/ternary models with calibration sets.
+- Measure end-to-end **latency/FPS** on Raspberry Pi 5/4 at 640×640; report median and P95 over ≥500 frames.
+- Measure **power** with an inline USB power meter; report average/peak watts and energy per frame.
+- Profile operator breakdown to confirm the fraction of ops running multiplication-free (shift/add/skip).
+
+### 11.5 Success / Fail Criteria
+- Accuracy gap ≤1% absolute mAP50-95 versus FP32; any drop beyond this is a failure of parity.
+- Latency/energy improvement ≥3× versus FP32 at identical resolution and batch size.
+- Spectral separation remains >0.3 after convergence with std <0.5 mAP across seeds.
+
+### 11.6 Artifacts to Release
+- Training/eval scripts, configs, fixed seeds, and logged metrics (TensorBoard/CSV).
+- Checkpoints for all ablations plus exported ONNX/TFLite artifacts.
+- Exact benchmark commands and raw power/latency logs.
+- A short validation report summarizing results, deviations, and known issues.
+
+### 11.7 Sandbox Mathematical and Empirical Checks (executed here)
+The following quick checks were executed in this sandbox to provide minimal evidence and guardrails. They **do not** replace full training/benchmark validation above.
+
+| Check | Method | Result |
+|-------|--------|--------|
+| Information-theoretic bits | log2(3), log2(5) | log2(3) = 1.584963, log2(5) = 2.321928 |
+| Compression vs. FP32 | 32 / log2(5) | 13.7816× smaller weight storage than FP32 (theoretical) |
+| Base-5 fusion linearity | Pure-Python conv sanity test (seed=0) comparing `(W_A + W_B) * X` vs. `W_A*X + W_B*X` | max difference = 0, sample output checksum = 29, runtime ≈ 0.16 ms |
+
+**Limitations**: No training/inference code exists in this repository, so dataset-level accuracy and hardware latency/energy measurements could not be executed here. The full validation plan above remains required to substantiate the manuscript claims.
