@@ -746,7 +746,7 @@ The research proposals, manuscripts, preprints, and application documents in thi
 The manuscripts here remain speculative until they are backed by reproducible experiments. The following protocol defines a minimal, evidence-focused pathway to validate (or falsify) the Spectral-ResiBit YOLO claims through empirical testing.
 
 ### 11.1 Experimental Goals
-- **Accuracy**: Demonstrate that Base-5 dual experts + INT8 residual highways + spectral orthogonality recover mAP (mean Average Precision) within 1 percentage point (absolute) of the FP32 baseline on COCO val2017.
+- **Accuracy**: Demonstrate that Base-5 dual experts + INT8 residual highways + spectral orthogonality recover mAP (mean Average Precision) within 1 absolute percentage point (e.g., 50% → 49%) of the FP32 baseline on COCO val2017.
 - **Efficiency**: Show ≥3× end-to-end latency speedup (or proportional energy-per-frame reduction) on Raspberry Pi 5/4 versus FP32, with multiplication-free execution verified in operator profiling.
 - **Stability**: Confirm that spectral separation and sparsity metrics converge consistently across seeds.
 
@@ -782,7 +782,7 @@ Log for every run:
 ### 11.5 Success / Fail Criteria
 - Accuracy gap ≤1% absolute mAP50-95 versus FP32; any drop beyond this is a failure of parity.
 - Latency/energy improvement ≥3× versus FP32 at identical resolution and batch size.
-- Spectral separation remains >0.3 after convergence (threshold chosen to ensure each expert preserves distinct frequency content); mAP standard deviation across seeds stays <0.5 percentage points.
+- Spectral separation coefficient (mean cross-spectrum correlation; see spectral orthogonality loss in §5.5) remains >0.3 after convergence (threshold chosen to ensure each expert preserves distinct frequency content); mAP standard deviation across seeds stays <0.5 percentage points.
 
 ### 11.6 Artifacts to Release
 - Training/eval scripts, configs, fixed seeds, and logged metrics (TensorBoard/CSV).
