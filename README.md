@@ -782,7 +782,7 @@ Log for every run:
 ### 11.5 Success / Fail Criteria
 - Accuracy gap ≤1% absolute mAP50-95 versus FP32; any drop beyond this is a failure of parity.
 - Latency/energy improvement ≥3× versus FP32 at identical resolution and batch size.
-- Spectral separation remains >0.3 after convergence with std <0.5 mAP across seeds.
+- Spectral separation remains >0.3 after convergence; mAP variation across seeds stays <0.5 absolute mAP.
 
 ### 11.6 Artifacts to Release
 - Training/eval scripts, configs, fixed seeds, and logged metrics (TensorBoard/CSV).
@@ -797,6 +797,6 @@ The following quick checks were executed in this sandbox to provide minimal evid
 |-------|--------|--------|
 | Information-theoretic bits | log2(3), log2(5) | log2(3) = 1.584963, log2(5) = 2.321928 |
 | Compression vs. FP32 | 32 / log2(5) | 13.7816× smaller weight storage than FP32 (theoretical) |
-| Base-5 fusion linearity | Pure-Python conv sanity test (seed=0) comparing `(W_A + W_B) * X` vs. `W_A*X + W_B*X` | max difference = 0, sample output checksum = 29, runtime ≈ 0.16 ms |
+| Base-5 fusion linearity | Pure-Python conv sanity test (seed=0) comparing `(W_A + W_B) * X` vs. `W_A*X + W_B*X` | max difference = 0 (linearity sanity only), sample output checksum = 29, runtime ≈ 0.16 ms |
 
 **Limitations**: No training/inference code exists in this repository, so dataset-level accuracy and hardware latency/energy measurements could not be executed here. The full validation plan above remains required to substantiate the manuscript claims.
