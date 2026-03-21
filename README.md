@@ -782,7 +782,8 @@ Log for every run:
 ### 11.5 Success / Fail Criteria
 - Accuracy gap ≤1% absolute mAP50-95 versus FP32; any drop beyond this is a failure of parity.
 - Latency/energy improvement ≥3× versus FP32 at identical resolution and batch size.
-- Spectral separation coefficient (mean cross-spectrum correlation; see spectral orthogonality loss in §5.5) remains >0.3 after convergence; this is an initial target to keep expert frequency content meaningfully distinct and should be tuned once empirical distributions are observed. mAP standard deviation across seeds stays <0.5 percentage points.
+- Spectral separation coefficient (mean cross-spectrum correlation; see spectral orthogonality loss in §5.5) remains >0.3 after convergence; this is an initial target to keep expert frequency content meaningfully distinct and should be tuned once empirical distributions are observed.
+- mAP standard deviation across seeds stays <0.5 percentage points.
 
 ### 11.6 Artifacts to Release
 - Training/eval scripts, configs, fixed seeds, and logged metrics (TensorBoard/CSV).
@@ -797,6 +798,6 @@ The following quick checks were executed in this sandbox to provide minimal evid
 |-------|--------|--------|
 | Information-theoretic bits | log2(3), log2(5) | log2(3) = 1.584963, log2(5) = 2.321928 |
 | Compression vs. FP32 | 32 / log2(5) | 13.7816× smaller weight storage than FP32 (theoretical) |
-| Base-5 fusion linearity | Pure-Python conv sanity test (seed=0) comparing `(W_A + W_B) * X` vs. `W_A*X + W_B*X` | max difference = 0 using integer arithmetic; confirms linearity of fused convolution but does **not** validate end-to-end accuracy, training, or quantization noise behavior (floating-point implementations should expect small epsilons). |
+| Base-5 fusion linearity | Pure-Python conv sanity test (seed=0) comparing `(W_A + W_B) * X` vs. `W_A*X + W_B*X` | Integer arithmetic → max difference = 0. Floating-point implementations should expect small epsilons. Confirms linearity of fused convolution but does **not** validate end-to-end accuracy, training, or quantization noise behavior. |
 
 **Limitations**: No training/inference code exists in this repository, so dataset-level accuracy and hardware latency/energy measurements could not be executed here. The full validation plan above remains required to substantiate the manuscript claims.
