@@ -798,6 +798,6 @@ The following quick checks were executed in this sandbox to provide minimal evid
 |-------|--------|--------|
 | Information-theoretic bits | log2(3), log2(5) | log2(3) = 1.584963, log2(5) = 2.321928 |
 | Compression vs. FP32 | 32 / log2(5) | 13.7816× smaller weight storage than FP32 (theoretical) |
-| Base-5 fusion linearity | Pure-Python conv sanity test (seed=0) comparing `(W_A + W_B) * X` vs. `W_A\\*X + W_B\\*X` | Integer arithmetic → max difference = 0. Floating-point implementations should expect small epsilons. Confirms linearity of fused convolution but does **not** validate end-to-end accuracy, training, or quantization noise behavior. |
+| Base-5 fusion linearity | Pure-Python conv sanity test (seed=0) comparing `(W_A + W_B) * X` vs. `W_A * X + W_B * X` | Integer arithmetic → max difference = 0. Floating-point implementations should expect small epsilons. Confirms linearity of fused convolution but does **not** validate end-to-end accuracy, training, or quantization noise behavior. |
 
 **Limitations**: No training/inference code exists in this repository, so dataset-level accuracy and hardware latency/energy measurements could not be executed here. The full validation plan above remains required to substantiate the manuscript claims.
