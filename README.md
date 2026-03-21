@@ -50,7 +50,7 @@ If this paradigm could be transferred to vision models, it would enable truly mu
 
 | File | Title | Type | Date | Status |
 |------|-------|------|------|--------|
-| `c0f315e2-829b-40dc-b069-0b21bedc015c.pdf` | **DualExpert-BitYOLO26**: Restoring Representational Capacity in Extreme Quantisation via Ternary Reparameterisation | Research Paper (Paper 1 in series) | Feb 2026 | ⚠️ Unvalidated |
+| `c0f315e2-829b-40dc-b069-0b21bedc015c.pdf` | **DualExpert-BitYOLO26**: Restoring Representational Capacity in Extreme Quantization via Ternary Reparameterization | Research Paper (Paper 1 in series) | Feb 2026 | ⚠️ Unvalidated |
 | `f0d4ebf0-a0b4-4b62-9f54-527d87e3e6bb.pdf` | **DualExpert-BitYOLO26** *(duplicate)* | Research Paper (identical to above) | Feb 2026 | ⚠️ Unvalidated |
 | `75164103-a63b-451f-9e00-625d47c02dea.pdf` | **NeuroBit-SCS**: Decoupling Texture and Shape in 1.58-Bit YOLO Architectures via Static Channel Splitting | Research Paper (Paper 2 in series) | Feb 21, 2026 | ⚠️ Unvalidated |
 | `8b2d7b18-be2a-42ab-908d-62720fd29691.pdf` | **ResiBit-YOLO**: Residual-Precision 1.58-bit Object Detection with Dual-Stream Ternary Experts | Research Paper (Paper 3 in series) | Feb 2026 | ⚠️ Unvalidated |
@@ -99,7 +99,7 @@ This paper introduces the foundational concept of the **Dual-Expert Base-5 archi
 - If you train **two independent ternary experts** (W_A and W_B) and **fuse them by element-wise addition**, the resulting quinary weight W_fused = W_A + W_B in {-2, -1, 0, +1, +2} encodes log2(5) ≈ 2.322 bits/parameter.
 - This recovers ~47% additional representational capacity (1.585 → 2.322 bits) without incurring dual memory bandwidth at inference time, because the fused weight is a single matrix stored in base-5 encoding.
 
-This approach is positioned within the framework of **Mixture of Quantisation Experts (MoQE)**, drawing inspiration from sparse Mixture-of-Experts (Shazeer et al., 2017) but applying the concept to weight quantisation rather than dynamic routing.
+This approach is positioned within the framework of **Mixture of Quantization Experts (MoQE)**, drawing inspiration from sparse Mixture-of-Experts (Shazeer et al., 2017) but applying the concept to weight quantization rather than dynamic routing.
 
 #### Key technical details
 
@@ -171,7 +171,7 @@ The paper also identifies and resolves the **"Packing Fallacy"**: naive bit-pack
 
 ### 3.3 Paper 3 — ResiBit-YOLO
 
-**Full title**: *ResiBit-YOLO: Residual-Precision 1.58-bit Object Detection with Dual-Stream Ternary Experts — A Problem-Solution Investigation of Gradient Manifold Collapse in Extreme Quantisation for Edge Vision*
+**Full title**: *ResiBit-YOLO: Residual-Precision 1.58-bit Object Detection with Dual-Stream Ternary Experts — A Problem-Solution Investigation of Gradient Manifold Collapse in Extreme Quantization for Edge Vision*
 
 **File**: `8b2d7b18-be2a-42ab-908d-62720fd29691.pdf`
 
@@ -200,8 +200,8 @@ This is the most experimental and forensically detailed paper in the series. It 
 | Metric | Value | Interpretation |
 |--------|-------|----------------|
 | Total convolutional layers | 126 | Full YOLOv26n backbone |
-| Average quantisation MSE | 0.005639 | Low mean sensitivity |
-| Maximum quantisation MSE | 0.079618 | High outlier sensitivity |
+| Average quantization MSE | 0.005639 | Low mean sensitivity |
+| Maximum quantization MSE | 0.079618 | High outlier sensitivity |
 | MSE exclusion threshold | 0.007575 | Top 10% by MSE |
 | Layers excluded (MSE) | 13 | High-sensitivity preserved |
 | Layers excluded (ch=4) | 6 | Narrow-channel preserved |
@@ -659,7 +659,7 @@ TERNARY LLMs
 MIXTURE OF EXPERTS (Shazeer et al., 2017)
   --> Dynamic routing MoE (high accuracy, high routing overhead)
   --> Static Channel Splitting (SCS) = zero-overhead static MoE
-  --> Mixture of Quantisation Experts (MoQE) framing in this series
+  --> Mixture of Quantization Experts (MoQE) framing in this series
 
 QAT STABILITY RESEARCH
   --> DoReFa-Net: gradient quantization is the bottleneck
